@@ -1,0 +1,9 @@
+.git
+.env
+.ipynb_checkpoints/
+.venv/
+.idea/
+**/__pycache__/
+firebase_creds.json
+.streamlit/secrets.toml
+/.idea
