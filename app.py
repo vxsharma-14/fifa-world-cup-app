@@ -12,9 +12,10 @@ from src.ui.tournament_setup import render_tournament_setup
 from src.ui.sidebar import render_sidebar_elements
 from streamlit_cookies_controller import CookieController
 # ...
-@st.cache_resource
 def get_cookie_controller():
-    return CookieController()
+    if "cookie_controller" not in st.session_state:
+        st.session_state["cookie_controller"] = CookieController()
+    return st.session_state["cookie_controller"]
 
 def main() -> None:
     st.set_page_config(page_title="Fifa Fantasy APSJ", layout="wide", initial_sidebar_state="auto")
