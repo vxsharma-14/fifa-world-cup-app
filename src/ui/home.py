@@ -1,7 +1,7 @@
 """UI component rendering the landing dashboard summary for logged-in users."""
 
 import streamlit as st
-from src.db_service import get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches
+from src.db_service import get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_ist_date_key
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime
@@ -77,7 +77,7 @@ def render_home_summary_dashboard(email: str) -> None:
 
     with col2:
         st.markdown("### 📅 Match Status Tracking")
-        daily_t = get_daily_predictions(email)
+        daily_t = get_daily_predictions(email, get_ist_date_key())
         upcoming_teams_map = daily_t.get("teams", {})
         upcoming_players = daily_t.get("players", [])
 
@@ -106,7 +106,10 @@ def render_home_summary_dashboard(email: str) -> None:
             st.markdown("##### ✅ Completed Matches")
             for match in sorted(completed_list, key=lambda x: x.get("kickoff_time", "")):
                 match_id = match.get("id")
-                saved_winner = upcoming_teams_map.get(match_id, "None Submitted")
+                # Get the date for this specific match to lookup predictions
+                match_date = get_ist_date_key(datetime.fromisoformat(match.get("kickoff_time", "")))
+                match_preds = get_daily_predictions(email, match_date)
+                saved_winner = match_preds.get("teams", {}).get(match_id, "None Submitted")
                 st.markdown(f"🏁 *{match.get('display_string')}* ➔ **Your Pick:** `{saved_winner}`")
             st.markdown("---")
 

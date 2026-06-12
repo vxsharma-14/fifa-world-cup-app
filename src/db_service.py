@@ -34,18 +34,42 @@ def reset_user_password(email: str, generic_password: str = "123456") -> None:
     """Admin tool to override a user's password."""
     db.reference(f"users/{clean_email_key(email)}/password_hash").set(hash_password(generic_password))
 
+from datetime import datetime
+# ... (rest of imports)
+
 def get_scheduled_matches() -> dict:
-    """Fetches all scheduled match objects organized by their unique IDs."""
-    return db.reference("metadata/matches").get() or {}
+    """Fetches all scheduled matches across all dates, returns a flat dict of all matches."""
+    all_dates_ref = db.reference("metadata").get() or {}
+    all_matches = {}
+    for date, matches in all_dates_ref.items():
+        if isinstance(matches, dict):
+            all_matches.update(matches)
+    return all_matches
+
+def get_matches_by_date() -> dict:
+    """Fetches the nested metadata structure: {date: {match_id: {...}}}."""
+    return db.reference("metadata").get() or {}
+
+def get_ist_date_key(dt: datetime = None) -> str:
+    """Generates a YYYY-MM-DD key for a given datetime in IST."""
+    if dt is None:
+        dt = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+    else:
+        dt = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
+    return dt.strftime("%Y-%m-%d")
 
 def save_structured_match(match_id: str, home: str, away: str, kickoff_iso: str, display_str: str) -> None:
-    """Saves or updates a standardized match node with an explicit timeline validation string."""
-    db.reference(f"metadata/matches/{match_id}").set({
+    """Saves a match node with the date-indexed structure: metadata/{date}/{match_id}."""
+    kickoff_dt = datetime.fromisoformat(kickoff_iso)
+    date_key = get_ist_date_key(kickoff_dt)
+    
+    db.reference(f"metadata/{date_key}/{match_id}").set({
         "id": match_id,
         "home_team": home,
         "away_team": away,
         "kickoff_time": kickoff_iso,
-        "display_string": display_str
+        "display_string": display_str,
+        "status": "scheduled"
     })
 
 def update_matches(matches_list: list) -> None:
@@ -64,13 +88,13 @@ def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
         "submitted_at": get_ist_timestamp()
     })
 
-def get_daily_predictions(email: str) -> dict:
-    """Retrieves current matchday choices mapped to an email user."""
-    return db.reference(f"daily_predictions/{clean_email_key(email)}").get() or {}
+def get_daily_predictions(email: str, date: str) -> dict:
+    """Retrieves matchday choices for a specific user and date."""
+    return db.reference(f"daily_predictions/{clean_email_key(email)}/{date}").get() or {}
 
-def save_daily_predictions(email: str, match_winners_map: dict, daily_players: list) -> None:
-    """Locks user selections for today's match winners and target dynamic players."""
-    db.reference(f"daily_predictions/{clean_email_key(email)}").set({
+def save_daily_predictions(email: str, date: str, match_winners_map: dict, daily_players: list) -> None:
+    """Locks user selections for a specific date's match winners and target dynamic players."""
+    db.reference(f"daily_predictions/{clean_email_key(email)}/{date}").set({
         "teams": match_winners_map,
         "players": daily_players,
         "submitted_at": get_ist_timestamp()
@@ -80,23 +104,52 @@ def delete_all_matches() -> None:
     """Clears out the entire match schedule metadata node."""
     db.reference("metadata/matches").delete()
 
-
-from src.scoring_engine import calculate_match_points
-
-# ... (rest of imports)
-
 def save_match_result(match_id: str, result_data: dict) -> None:
-    """Saves finalized results and triggers incremental leaderboard update."""
+    """Saves finalized results directly into the match metadata node and triggers entity scoring."""
+    from src.scoring_service import update_match_points_node
     result_data["updated_at"] = get_ist_timestamp()
-    db.reference(f"results/{match_id}").set(result_data)
-    
-    # Trigger incremental recalculation
-    recalculate_and_save_user_points(match_id, result_data)
+
+    # Need to find the match metadata to get the date
+    all_dates = db.reference("metadata").get() or {}
+    target_match = None
+    target_date = None
+    for date, matches in all_dates.items():
+        if isinstance(matches, dict) and match_id in matches:
+            target_match = matches[match_id]
+            target_date = date
+            break
+
+    if not target_match:
+        raise ValueError(f"Match {match_id} not found in metadata.")
+
+    # Update match metadata with results and status
+    match_ref = db.reference(f"metadata/{target_date}/{match_id}")
+    match_ref.update({
+        "results": result_data,
+        "status": "completed"
+    })
+
+    # Trigger entity-level point update
+    update_match_points_node(match_id, result_data, target_date, target_match.get("home_team"), target_match.get("away_team"))
+
 
 def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
     """Incrementally updates participant points and leaderboard, excluding admins."""
+    from src.scoring_engine import calculate_match_points
     all_users = get_all_users()
-    match_metadata = db.reference(f"metadata/matches/{match_id}").get()
+    
+    # Locate match in date-indexed metadata
+    all_dates = db.reference("metadata").get() or {}
+    match_metadata = None
+    match_date = None
+    for date, matches in all_dates.items():
+        if isinstance(matches, dict) and match_id in matches:
+            match_metadata = matches[match_id]
+            match_date = date
+            break
+            
+    if not match_metadata:
+        raise ValueError(f"Match {match_id} not found in metadata.")
     
     for email, user_info in all_users.items():
         # Filter out admins
@@ -105,7 +158,7 @@ def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
             
         # Get existing data
         pre_t_picks = get_pre_tournament_picks(email)
-        daily_picks = get_daily_predictions(email)
+        daily_picks = get_daily_predictions(email, match_date)
         
         # Calculate new points
         new_breakdown = calculate_match_points(match_id, pre_t_picks, daily_picks, result_data, match_metadata)
@@ -129,64 +182,8 @@ def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
         # Delta = new_points - old_points
         delta = new_total_match - old_total_match
         user_leaderboard["total_score"] = user_leaderboard.get("total_score", 0) + delta
-        # Removed 'last_daily_score' as requested
         
         leaderboard_ref.update(user_leaderboard)
-        
-        # Track granular player and team stats
-        track_player_and_team_stats(email, match_id, pre_t_picks, daily_picks, result_data)
-
-def track_player_and_team_stats(email: str, match_id: str, pre_t_picks: dict, daily_picks: dict, result_data: dict) -> None:
-    """Tracks granular stats for all player and team picks (as previously planned) and global stats."""
-    
-    # 1. Update Global Player Stats (regardless of user selection)
-    all_scorers = result_data.get("home_scorers", []) + result_data.get("away_scorers", [])
-    yellow_cards = result_data.get("yellow_cards", [])
-    red_cards = result_data.get("red_cards", [])
-    motm = result_data.get("player_of_the_match")
-    
-    # Get all unique players involved in the match results
-    all_involved_players = set(all_scorers + yellow_cards + red_cards + ([motm] if motm else []))
-    
-    for player in all_involved_players:
-        if not player: continue
-        
-        player_ref = db.reference(f"global_player_stats/{player}")
-        stats = player_ref.get() or {"goals": 0, "yellow_cards": 0, "red_cards": 0, "motm": 0}
-        
-        stats["goals"] += all_scorers.count(player)
-        stats["yellow_cards"] += yellow_cards.count(player)
-        stats["red_cards"] += red_cards.count(player)
-        if player == motm:
-            stats["motm"] += 1
-            
-        player_ref.set(stats)
-
-    # 2. Update Global Team Stats
-    home_team = result_data.get("home_team") # Note: This data is not directly in result_data passed, 
-                                            # we need metadata here, but simplifying for now.
-    # Actually, we should pull team names from metadata
-    match_meta = db.reference(f"metadata/matches/{match_id}").get()
-    home = match_meta.get("home_team")
-    away = match_meta.get("away_team")
-    h_score = result_data.get("home_score", 0)
-    a_score = result_data.get("away_score", 0)
-
-    for team, goals, opponent_goals in [(home, h_score, a_score), (away, a_score, h_score)]:
-        team_ref = db.reference(f"global_team_stats/{team}")
-        stats = team_ref.get() or {"wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
-        
-        if goals > opponent_goals: stats["wins"] += 1
-        elif goals < opponent_goals: stats["losses"] += 1
-        else: stats["draws"] += 1
-        
-        stats["goals_for"] += goals
-        stats["goals_against"] += opponent_goals
-        
-        team_ref.set(stats)
-
-    # 3. (Optional) Keep existing user-specific tracking logic if needed, 
-    # but based on requirements, the global stats seem to be the primary need.
 
 def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""

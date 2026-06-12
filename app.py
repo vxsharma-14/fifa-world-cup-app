@@ -25,9 +25,8 @@ def main() -> None:
         st.info("👈 Use the Access Portal in the sidebar to create an account or sign in.")
         return
         
-    # Render persistent sidebar elements (Only if not admin, as admin panel has its own management)
-    if active_email != CONFIG.ADMIN_EMAIL:
-        render_sidebar_elements()
+    # Render persistent sidebar elements
+    render_sidebar_elements(active_email)
 
     if active_email == CONFIG.ADMIN_EMAIL:
         render_admin_dashboard()
@@ -35,7 +34,7 @@ def main() -> None:
 
     # --- PAGE NAVIGATION MENU ---
     st.sidebar.markdown("### 🧭 Main Navigation")
-    page_options = ["🏠 Dashboard Home", "🏆 Tournament Setup", "📝 Prediction Entry Forms", "🔍 Detailed Points Audit"]
+    page_options = ["🏠 Dashboard Home", "🏆 Tournament Setup", "📝 Daily Predictions", "🔍 Detailed Points Audit"]
 
     # Robust session state initialization
     if "current_page" not in st.session_state or st.session_state["current_page"] not in page_options:
@@ -59,9 +58,10 @@ def main() -> None:
     elif st.session_state["current_page"] == "🏆 Tournament Setup":
         render_tournament_setup(active_email)
 
-    elif st.session_state["current_page"] == "📝 Prediction Entry Forms":
-        raw_matches = get_scheduled_matches()
-        render_daily_predictions_section(active_email, raw_matches)
+    elif st.session_state["current_page"] == "📝 Daily Predictions":
+        from src.db_service import get_matches_by_date
+        raw_matches_nested = get_matches_by_date()
+        render_daily_predictions_section(active_email, raw_matches_nested)
 
     elif st.session_state["current_page"] == "🔍 Detailed Points Audit":
         render_granular_points_analysis(active_email)

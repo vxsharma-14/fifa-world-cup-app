@@ -1,0 +1,463 @@
+{
+    "daily_predictions": {
+        "ashu_770@gmail_com": {
+            "players": [
+                "Raul JIMENEZ",
+                "Santiago GIMENEZ"
+            ],
+            "submitted_at": "2026-06-12 04:36 PM (Admin Player Override)",
+            "teams": {
+                "match_1781249203": "Mexico",
+                "match_1781249301": "Draw"
+            }
+        },
+        "harshmonster@gmail_com": {
+            "players": [
+                {
+                    "name": "Player1",
+                    "team": "Canada"
+                },
+                {
+                    "name": "Adams Players2",
+                    "team": "USA"
+                }
+            ],
+            "submitted_at": "2026-06-12 09:38:55 PM IST",
+            "teams": {
+                "match_1781267797": "Canada",
+                "match_1781267816": "USA"
+            }
+        },
+        "malaygangopadhyay@gmail_com": {
+            "players": [
+                "Raul JIMENEZ",
+                "Julian QUINONES"
+            ],
+            "submitted_at": "2026-06-12 04:38 PM (Admin Player Override)",
+            "teams": {
+                "match_1781249203": "Mexico",
+                "match_1781249301": "Korea Republic"
+            }
+        },
+        "nikhil_mahajan2003@yahoo_com": {
+            "players": [
+                {
+                    "name": "    Jonathan David (Canada)",
+                    "team": "Canada"
+                },
+                {
+                    "name": "    Christian Pulisic (USA)",
+                    "team": "USA"
+                }
+            ],
+            "submitted_at": "2026-06-12 09:03:50 PM IST",
+            "teams": {
+                "match_1781267797": "Canada",
+                "match_1781267816": "USA"
+            }
+        },
+        "vxsharma14@gmail_com": {
+            "players": [
+                "SON Heungmin",
+                "Patrik Schick"
+            ],
+            "submitted_at": "2026-06-12 02:00 PM (Admin Player Override)",
+            "teams": {
+                "match_1781249203": "Mexico",
+                "match_1781249301": "Czechia"
+            }
+        }
+    },
+    "global_player_stats": {
+        "HWANG Inbeom": {
+            "goals": 6,
+            "motm": 6,
+            "red_cards": 0,
+            "yellow_cards": 0
+        },
+        "Julian QUINONES": {
+            "goals": 26,
+            "motm": 20,
+            "red_cards": 0,
+            "yellow_cards": 0
+        },
+        "Ladislav KREJCI": {
+            "goals": 6,
+            "motm": 0,
+            "red_cards": 0,
+            "yellow_cards": 0
+        },
+        "OH Hyeongyu": {
+            "goals": 6,
+            "motm": 0,
+            "red_cards": 0,
+            "yellow_cards": 0
+        },
+        "Raul JIMENEZ": {
+            "goals": 26,
+            "motm": 0,
+            "red_cards": 0,
+            "yellow_cards": 0
+        }
+    },
+    "global_team_stats": {
+        "Czechia": {
+            "draws": 0,
+            "goals_against": 12,
+            "goals_for": 6,
+            "losses": 6,
+            "wins": 0
+        },
+        "Korea Republic": {
+            "draws": 0,
+            "goals_against": 6,
+            "goals_for": 12,
+            "losses": 0,
+            "wins": 6
+        },
+        "Mexico": {
+            "draws": 0,
+            "goals_against": 0,
+            "goals_for": 52,
+            "losses": 0,
+            "wins": 26
+        },
+        "South Africa": {
+            "draws": 0,
+            "goals_against": 54,
+            "goals_for": 0,
+            "losses": 27,
+            "wins": 0
+        }
+    },
+    "leaderboard": {
+        "ashu_770@gmail_com": {
+            "name": "Ashutosh Mishra",
+            "total_score": 10
+        },
+        "harshmonster@gmail_com": {
+            "name": "Harsh Kharate",
+            "total_score": 10
+        },
+        "jayant_kundnani@gmail_com": {
+            "name": "Jayant",
+            "total_score": 0
+        },
+        "malaygangopadhyay@gmail_com": {
+            "name": "Malay gangopadhyay",
+            "total_score": 40
+        },
+        "nikhil_mahajan2003@yahoo_com": {
+            "name": "Nikhil",
+            "total_score": 0
+        },
+        "vxsharma14@gmail_com": {
+            "name": "Vishal Sharma",
+            "total_score": 0
+        }
+    },
+    "metadata": {
+        "matches": {
+            "match_1781267711": {
+                "away_team": "South Africa",
+                "display_string": "12:30 AM | Mexico vs South Africa",
+                "home_team": "Mexico",
+                "id": "match_1781267711",
+                "kickoff_time": "2026-06-12T00:30:00+05:30"
+            },
+            "match_1781267756": {
+                "away_team": "Czechia",
+                "display_string": "07:30 AM | Korea Republic vs Czechia",
+                "home_team": "Korea Republic",
+                "id": "match_1781267756",
+                "kickoff_time": "2026-06-12T07:30:00+05:30"
+            },
+            "match_1781267797": {
+                "away_team": "Bosnia and Herzegovina",
+                "display_string": "12:30 AM | Canada vs Bosnia and Herzegovina",
+                "home_team": "Canada",
+                "id": "match_1781267797",
+                "kickoff_time": "2026-06-13T00:30:00+05:30"
+            },
+            "match_1781267816": {
+                "away_team": "Paraguay",
+                "display_string": "06:30 AM | USA vs Paraguay",
+                "home_team": "USA",
+                "id": "match_1781267816",
+                "kickoff_time": "2026-06-13T06:30:00+05:30"
+            }
+        }
+    },
+    "points_audit": {
+        "ashu_770@gmail_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 10,
+                    "total_points": 10,
+                    "updated_at": "2026-06-12 09:23:14 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:02 PM IST"
+                }
+            }
+        },
+        "harshmonster@gmail_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 10,
+                    "total_points": 10,
+                    "updated_at": "2026-06-12 09:23:14 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:03 PM IST"
+                }
+            }
+        },
+        "jayant_kundnani@gmail_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:23:15 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:04 PM IST"
+                }
+            }
+        },
+        "malaygangopadhyay@gmail_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 40,
+                    "total_points": 40,
+                    "updated_at": "2026-06-12 09:23:16 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:05 PM IST"
+                }
+            }
+        },
+        "nikhil_mahajan2003@yahoo_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:23:17 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:06 PM IST"
+                }
+            }
+        },
+        "vxsharma14@gmail_com": {
+            "match_results": {
+                "match_1781267711": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:23:18 PM IST"
+                },
+                "match_1781267756": {
+                    "discipline": 0,
+                    "goal_difference": 0,
+                    "match_winner": 0,
+                    "player_performance": 0,
+                    "total_points": 0,
+                    "updated_at": "2026-06-12 09:29:07 PM IST"
+                }
+            }
+        }
+    },
+    "pre_tournament": {
+        "harshmonster@gmail_com": {
+            "players": [
+                {
+                    "name": "Mbappe",
+                    "team": "France"
+                },
+                {
+                    "name": "Junior",
+                    "team": "Brazil"
+                },
+                {
+                    "name": "Gordon",
+                    "team": "England"
+                },
+                {
+                    "name": "E Hazard",
+                    "team": "Belgium"
+                },
+                {
+                    "name": "F Torres",
+                    "team": "Spain"
+                }
+            ],
+            "submitted_at": "2026-06-12 09:40:23 PM IST",
+            "teams": [
+                "Spain",
+                "Argentina"
+            ]
+        },
+        "nikhil_mahajan2003@yahoo_com": {
+            "players": [
+                {
+                    "name": "Kylian Mbappe- France",
+                    "team": "France "
+                },
+                {
+                    "name": "Harry Kane - England",
+                    "team": "England "
+                },
+                {
+                    "name": "Vin\u00edcius J\u00fanior- Brazil",
+                    "team": "Brazil"
+                },
+                {
+                    "name": "Lamine Yamal- Spain",
+                    "team": "Spain"
+                },
+                {
+                    "name": "Julian Alvarez- Argentina",
+                    "team": "Argentina "
+                }
+            ],
+            "submitted_at": "2026-06-12 08:58:12 PM IST",
+            "teams": [
+                "Spain",
+                "France"
+            ]
+        },
+        "vxsharma14@gmail_com": {
+            "players": [
+                "Ronaldo",
+                "Salah",
+                "Messi",
+                "James",
+                "Mbappe"
+            ],
+            "submitted_at": "2026-06-11 10:24:34 PM IST",
+            "teams": [
+                "Argentina",
+                "Brazil"
+            ]
+        }
+    },
+    "results": {
+        "match_1781267711": {
+            "away_score": 0,
+            "home_score": 2,
+            "home_scorers": [
+                "Julian QUINONES",
+                "Raul JIMENEZ"
+            ],
+            "match_id": "match_1781267711",
+            "player_of_the_match": "Julian QUINONES",
+            "updated_at": "2026-06-12 09:23:13 PM IST",
+            "winning_team": "Mexico"
+        },
+        "match_1781267756": {
+            "away_score": 1,
+            "away_scorers": [
+                "Ladislav KREJCI"
+            ],
+            "home_score": 2,
+            "home_scorers": [
+                "OH Hyeongyu",
+                "HWANG Inbeom"
+            ],
+            "match_id": "match_1781267756",
+            "player_of_the_match": "HWANG Inbeom",
+            "updated_at": "2026-06-12 09:29:01 PM IST",
+            "winning_team": "Korea Republic"
+        }
+    },
+    "users": {
+        "admin@fifafantasy_com": {
+            "email": "admin@fifafantasy.com",
+            "name": "Tournament Admin",
+            "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9"
+        },
+        "admin@tournament_com": {
+            "email": "admin@tournament.com",
+            "name": "Tournament Admin",
+            "password_hash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+        },
+        "ashu_770@gmail_com": {
+            "email": "ashu.770@gmail.com",
+            "name": "Ashutosh Mishra",
+            "password_hash": "ff7a284cb6bc269ab9cd4f591e56e5b4e81fe7baf1aea68860574ff9bc281dd7"
+        },
+        "harshmonster@gmail_com": {
+            "email": "harshmonster@gmail.com",
+            "name": "Harsh Kharate",
+            "password_hash": "2b8ba2aec97ee9c5b9f1cc9c9c66c199f85118a75cfbdb38d4126b95ca68c508"
+        },
+        "jayant_kundnani@gmail_com": {
+            "email": "jayant.kundnani@gmail.com",
+            "name": "Jayant",
+            "password_hash": "bce6d534e2d63fffc0e0e1a88b8319e57f757853333541f237081f2ed37ab722"
+        },
+        "malaygangopadhyay@gmail_com": {
+            "email": "malaygangopadhyay@gmail.com",
+            "name": "Malay gangopadhyay",
+            "password_hash": "dcce432c852f6da915ad7fd8eaf020416bcfa82c5fec50725f84b173bceab533"
+        },
+        "nikhil_mahajan2003@yahoo_com": {
+            "email": "nikhil_mahajan2003@yahoo.com",
+            "name": "Nikhil",
+            "password_hash": "739b808dec636815db48e38b8beaa262e48f445e327d16b82ea744c78ababef4"
+        },
+        "shekhar_mukherjee1@gmail_com": {
+            "email": "shekhar.mukherjee1@gmail.com",
+            "name": "Shekhar M",
+            "password_hash": "df13e682a01b4529915c706beae076d2d9faa80f2791ec9ec23de9b073e38004"
+        },
+        "vxsharma14@gmail_com": {
+            "email": "vxsharma14@gmail.com",
+            "name": "Vishal Sharma",
+            "password_hash": "d45b5b62db317eadf8fbcc67bc18eb40aaee3bc51680221439d38cf9ac522c5e"
+        }
+    }
+}

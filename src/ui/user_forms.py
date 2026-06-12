@@ -5,7 +5,7 @@ import zoneinfo
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, save_pre_tournament_picks,
-    get_daily_predictions, save_daily_predictions
+    get_daily_predictions, save_daily_predictions, get_ist_date_key
 )
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
@@ -23,22 +23,50 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     from src.db_service import get_match_results
     existing_results = get_match_results()
     
-    active_matches = []
-    for m in raw_matches.values():
-        if m['id'] not in existing_results:
-            active_matches.append(m)
+    # Flatten matches to find active ones
+    all_matches = []
+    for date, matches_dict in raw_matches.items():
+        if isinstance(matches_dict, dict):
+            for match in matches_dict.values():
+                if isinstance(match, dict) and match.get('id') not in existing_results:
+                    all_matches.append(match)
 
-    if not active_matches:
+    if not all_matches:
         st.info("No active matches to predict.")
         return
 
-    # Sort matches chronologically
-    active_matches = sorted(active_matches, key=lambda x: x.get("kickoff_time", ""))
+    # Sort dates chronologically
+    sorted_dates = sorted(raw_matches.keys())
+    
+    # 1. Determine Target Matchday
+    target_date = None
+    for date in sorted_dates:
+        matches_on_date = raw_matches[date]
+        if not isinstance(matches_on_date, dict): continue
+        
+        # Find earliest match to determine cutoff
+        earliest_match = min(matches_on_date.values(), key=lambda x: x['kickoff_time'])
+        kickoff_dt = datetime.fromisoformat(earliest_match['kickoff_time']).astimezone(IST)
+        cutoff_dt = kickoff_dt - timedelta(minutes=15)
+        
+        if now_ist < cutoff_dt:
+            target_date = date
+            break
+            
+    if not target_date:
+        st.info("No upcoming matchdays are currently open for predictions.")
+        return
 
-    # 1. Handle clearing (generic reset)
-    existing = get_daily_predictions(email)
+    active_matches = raw_matches[target_date]
+    
+    # Sort matches for display
+    sorted_matches = sorted(active_matches.values(), key=lambda x: x.get("kickoff_time", ""))
+
+    existing = get_daily_predictions(email, target_date)
     existing_teams_map = existing.get("teams", {})
     existing_players = existing.get("players", [{'name': '', 'team': ''} for _ in range(2)])
+    
+    # ... (the rest of the form rendering logic using target_date and active_matches)
         
     # Process existing_players to ensure they are dictionaries
     processed_players = []
@@ -65,7 +93,7 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     # Identify Pre-T players involved in active matches
     active_pre_t_players = []
     playing_teams_active = set()
-    for match in active_matches:
+    for match in active_matches.values():
         playing_teams_active.add(match['home_team'])
         playing_teams_active.add(match['away_team'])
 
@@ -74,12 +102,13 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
             active_pre_t_players.append(p)
 
     with st.form("daily_prediction_form"):
+        st.markdown(f"### 🗓️ Matchday: {target_date}")
         col_m, col_p = st.columns([1, 3])
         
         with col_m:
             st.markdown("#### ⚽ Match Predictions")
             selected_winners = {}
-            for match in active_matches:
+            for match in active_matches.values():
                 match_id = match['id']
                 home, away = match['home_team'], match['away_team']
                 
@@ -132,6 +161,6 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
 
         if st.form_submit_button("Submit Predictions", type="primary"):
             player_list = [p for p in daily_player_inputs if p['name'].strip()]
-            save_daily_predictions(email, selected_winners, player_list)
-            st.success("Predictions saved!")
+            save_daily_predictions(email, target_date, selected_winners, player_list)
+            st.success(f"Predictions saved for {target_date}!")
             st.rerun()
