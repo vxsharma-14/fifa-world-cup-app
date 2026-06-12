@@ -205,14 +205,31 @@ def render_admin_dashboard() -> None:
             st.info("No participants found.")
         else:
             participant_data = []
+            def _extract_name(p):
+                if isinstance(p, dict):
+                    return str(p.get('name', ''))
+                return str(p)
+
             for email, user_info in all_users.items():
-                if "admin" in user_info.get("name", "").lower(): continue
+                # Ensure user_info is a dict
+                if not isinstance(user_info, dict): continue
+                
+                # Safely extract name
+                name = user_info.get("name", "")
+                if not isinstance(name, str): name = str(name)
+                
+                if "admin" in name.lower(): continue
+                
                 pre_t, daily = get_pre_tournament_picks(email), get_daily_predictions(email)
+                
+                # Robust extraction for all list fields
+                def _extract_str(item): return str(item) if not isinstance(item, dict) else str(item.get('name', ''))
+                
                 participant_data.append({
-                    "Name": user_info.get("name"),
-                    "Pre-T Teams": ", ".join(pre_t.get("teams", [])),
-                    "Pre-T Players": ", ".join(pre_t.get("players", [])),
-                    "Daily Players": ", ".join(daily.get("players", [])),
+                    "Name": name,
+                    "Pre-T Teams": ", ".join([str(t) for t in pre_t.get("teams", [])]),
+                    "Pre-T Players": ", ".join([_extract_name(p) for p in pre_t.get("players", [])]),
+                    "Daily Players": ", ".join([_extract_name(p) for p in daily.get("players", [])]),
                     "Daily Match Picks": ", ".join([f"{v}" for v in daily.get("teams", {}).values()])
                 })
             import pandas as pd
