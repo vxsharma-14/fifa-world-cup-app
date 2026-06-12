@@ -10,33 +10,13 @@ from src.ui.admin_panel import render_admin_dashboard
 from src.ui.points_analysis import render_granular_points_analysis
 from src.ui.tournament_setup import render_tournament_setup
 from src.ui.sidebar import render_sidebar_elements
-from streamlit_cookies_controller import CookieController
-# ...
-def get_cookie_controller():
-    if "cookie_controller" not in st.session_state:
-        st.session_state["cookie_controller"] = CookieController()
-    return st.session_state["cookie_controller"]
 
 def main() -> None:
     st.set_page_config(page_title="Fifa Fantasy APSJ", layout="wide", initial_sidebar_state="auto")
     st.title("🏆 FIFA Fantasy APSJ Dashboard")
 
-    controller = get_cookie_controller()
-
-    # Auto-login from cookie if session is empty
-    if "authenticated_user" not in st.session_state:
-        saved_email = controller.get("auth_email")
-        if saved_email:
-            # Re-fetch user data to populate session
-            from src.db_service import get_user_data
-            user_data = get_user_data(saved_email)
-            if user_data:
-                st.session_state["authenticated_user"] = saved_email
-                st.session_state["user_name"] = user_data["name"]
-
     # Initialize connection endpoints
     initialize_db()
-# ...
 
     # Render left tray entry points
     active_email = render_auth_panel()
@@ -44,7 +24,7 @@ def main() -> None:
     if not active_email:
         st.info("👈 Use the Access Portal in the sidebar to create an account or sign in.")
         return
-
+        
     # Render persistent sidebar elements (Only if not admin, as admin panel has its own management)
     if active_email != CONFIG.ADMIN_EMAIL:
         render_sidebar_elements()
