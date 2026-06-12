@@ -136,10 +136,10 @@ def render_admin_dashboard() -> None:
 
                         # Add buttons (outside form)
                         c_a1, c_a2 = st.columns(2)
-                        if c_a1.button("➕ Add Scorer", key=f"add_s_{m_id}"): 
+                        if c_a1.button("➕ Add Scorer", key=f"as_{m_id}"): 
                             st.session_state[s_key].append({'team': home, 'name': '', 'goals': 1})
                             st.rerun()
-                        if c_a2.button("➕ Add Card", key=f"add_c_{m_id}"): 
+                        if c_a2.button("➕ Add Card", key=f"ac_{m_id}"): 
                             st.session_state[c_key].append({'team': home, 'name': '', 'type': 'Yellow'})
                             st.rerun()
                         

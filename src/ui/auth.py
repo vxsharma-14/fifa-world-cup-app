@@ -1,25 +1,26 @@
 """UI authorization workflows controlling context session initialization states."""
 
 import streamlit as st
+from streamlit_cookies_controller import CookieController
 from src.config import CONFIG
 from src.db_service import get_user_data, create_user, hash_password
-from src.ui.sidebar import render_sidebar_schedule
 
+@st.cache_resource
+def get_auth_cookie_controller():
+    return CookieController()
 
 def render_auth_panel() -> str:
     """Assembles access cards, login inputs, and sign-out triggers in the left tray."""
     st.sidebar.title("🔐 Access Portal")
+    controller = get_auth_cookie_controller()
 
     if "authenticated_user" in st.session_state:
         st.sidebar.success(f"Hello, {st.session_state['user_name']}")
-        if st.sidebar.button("Log Out", use_container_width=True):
+        if st.sidebar.button("Log Out", use_container_width=True, key="logout_btn"):
+            controller.remove("auth_email")
             del st.session_state["authenticated_user"]
             del st.session_state["user_name"]
             st.rerun()
-
-        if st.session_state["authenticated_user"] != CONFIG.ADMIN_EMAIL:
-            render_sidebar_schedule()
-
         return st.session_state["authenticated_user"]
 
     auth_mode = st.sidebar.radio("Choose Action:", ["Login", "Sign Up"])
@@ -51,6 +52,7 @@ def render_auth_panel() -> str:
             if st.form_submit_button("Login"):
                 user_data = get_user_data(email)
                 if user_data and user_data["password_hash"] == hash_password(password):
+                    controller.set("auth_email", email) # Save cookie
                     st.session_state["authenticated_user"] = email
                     st.session_state["user_name"] = user_data["name"]
                     st.rerun()
