@@ -2,6 +2,7 @@
 
 import streamlit as st
 from src.db_service import get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches
+from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime
 import zoneinfo
@@ -10,26 +11,7 @@ import zoneinfo
 def show_leaderboard_popup() -> None:
     """Displays the live group rankings inside a clean modal popup wrapper."""
     st.markdown("### 🏆 Friend Standings")
-    leaderboard_data = db.reference("leaderboard").get() or {}
-
-    if not leaderboard_data:
-        st.info("No data available yet. Rank positions will update once the first match kicks off!")
-    else:
-        sorted_ranks = sorted(
-            [
-                {
-                    "Rank": 0,
-                    "Friend": v.get("name", k),
-                    "Total Points": f"{v.get('total_score', 0)} pts",
-                    "Last Gain": f"+{v.get('last_daily_score', 0)}"
-                }
-                for k, v in leaderboard_data.items()
-            ],
-            key=lambda x: int(x["Total Points"].split()[0]), reverse=True
-        )
-        for idx, item in enumerate(sorted_ranks, 1):
-            item["Rank"] = idx
-        st.table(sorted_ranks)
+    render_leaderboard_table()
 
     st.markdown("---")
     if st.button("Close Standings", use_container_width=True):

@@ -7,45 +7,11 @@ from src.db_service import (
     get_scheduled_matches, save_structured_match,
     delete_all_matches, save_match_result, get_match_results
 )
+from src.ui.leaderboard import render_leaderboard_table
 
 def render_admin_dashboard() -> None:
     """Renders structured scheduling calendars, match grading forms, and support tools."""
     st.header("👑 Admin Command Center")
-
-    # -------------------------------------------------------------
-    # 1. MATCH SCHEDULER
-    # -------------------------------------------------------------
-    st.subheader("📅 Master Calendar Match Scheduler")
-    with st.form("match_scheduler_form", clear_on_submit=True):
-        col_t1, col_t2 = st.columns(2)
-        with col_t1:
-            home_team = st.text_input("Home Team Name (e.g., Mexico)").strip()
-        with col_t2:
-            away_team = st.text_input("Away Team Name (e.g., South Africa)").strip()
-
-        col_d, col_t = st.columns(2)
-        with col_d:
-            match_date = st.date_input("Match Date", datetime.now().date())
-        with col_t:
-            match_time = st.time_input("Kickoff Time (IST)", time(12, 00))
-
-        if st.form_submit_button("➕ Add Match to Master Calendar"):
-            if not home_team or not away_team:
-                st.error("Please provide both team names.")
-            else:
-                combined_dt = datetime.combine(match_date, match_time)
-                ist_dt = combined_dt.replace(tzinfo=zoneinfo.ZoneInfo("Asia/Kolkata"))
-                kickoff_iso = ist_dt.isoformat()
-
-                timestamp_str = ist_dt.strftime("%I:%M %p")
-                display_str = f"{timestamp_str} | {home_team} vs {away_team}"
-                match_id = f"match_{int(datetime.now().timestamp())}"
-
-                save_structured_match(match_id, home_team, away_team, kickoff_iso, display_str)
-                st.success(f"Successfully scheduled: {display_str}")
-                st.rerun()
-
-    st.markdown("---")
 
     # Fetch active data states
     current_time = datetime.now(zoneinfo.ZoneInfo("Asia/Kolkata"))
@@ -67,269 +33,194 @@ def render_admin_dashboard() -> None:
             else:
                 upcoming_admin_list.append(match)
 
-    # -------------------------------------------------------------
-    # 2. UPCOMING MATCHES VIEW
-    # -------------------------------------------------------------
-    st.markdown("#### ⏳ Upcoming Scheduled Matches")
-    if not upcoming_admin_list:
-        st.info("No upcoming matches on the calendar.")
-    else:
-        sorted_upcoming = sorted(upcoming_admin_list, key=lambda x: x.get("kickoff_time", ""))
-        for m in sorted_upcoming:
-            dt_obj = datetime.fromisoformat(m["kickoff_time"])
-            formatted_date = dt_obj.strftime("%A, %b %d")
-            st.text(f"• [{formatted_date}] {m.get('display_string')}")
-
-        if st.button("🗑️ Clear Entire Match Schedule", type="primary"):
-            delete_all_matches()
-            st.success("All matches wiped out from the database configuration node.")
-            st.rerun()
-
-    st.markdown("---")
+    tab_sched, tab_grade, tab_part, tab_override, tab_leaderboard = st.tabs([
+        "📅 Matches & Scheduling", 
+        "⚽ Results & Grading", 
+        "👥 Participants", 
+        "💬 Overrides",
+        "🏆 Leaderboard"
+    ])
 
     # -------------------------------------------------------------
-    # 3. RESULTS & GRADING ENGINE (New Feature)
+    # TAB 1: MATCH SCHEDULER
     # -------------------------------------------------------------
-    st.subheader("⚽ Match Results & Grading Center")
-    st.caption("Submit stats for completed matches to log data points for leaderboard score distribution.")
+    with tab_sched:
+        st.subheader("📅 Master Calendar Match Scheduler")
+        with st.form("match_scheduler_form", clear_on_submit=True):
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                home_team = st.text_input("Home Team Name (e.g., Mexico)").strip()
+            with col_t2:
+                away_team = st.text_input("Away Team Name (e.g., South Africa)").strip()
 
-    if not completed_admin_list:
-        st.info("No completed matches found on the timeline to grade.")
-    else:
-        # Build a selection dropdown dictionary for completed matches
-        sorted_completed = sorted(completed_admin_list, key=lambda x: x.get("kickoff_time", ""))
-        match_options = {m["id"]: m["display_string"] for m in sorted_completed}
+            col_d, col_t = st.columns(2)
+            with col_d:
+                match_date = st.date_input("Match Date", datetime.now().date())
+            with col_t:
+                match_time = st.time_input("Kickoff Time (IST)", time(12, 00))
 
-        selected_match_id = st.selectbox(
-            "Select completed match to submit/update results:",
-            options=list(match_options.keys()),
-            format_func=lambda x: match_options[x]
-        )
+            if st.form_submit_button("➕ Add Match to Master Calendar"):
+                if not home_team or not away_team:
+                    st.error("Please provide both team names.")
+                else:
+                    combined_dt = datetime.combine(match_date, match_time)
+                    ist_dt = combined_dt.replace(tzinfo=zoneinfo.ZoneInfo("Asia/Kolkata"))
+                    kickoff_iso = ist_dt.isoformat()
 
-        # Pull selected match details
-        selected_match = next(m for m in sorted_completed if m["id"] == selected_match_id)
-        home = selected_match.get("home_team")
-        away = selected_match.get("away_team")
+                    timestamp_str = ist_dt.strftime("%I:%M %p")
+                    display_str = f"{timestamp_str} | {home_team} vs {away_team}"
+                    match_id = f"match_{int(datetime.now().timestamp())}"
 
-        # Visual indicator if the match has already been graded previously
-        if selected_match_id in existing_results:
-            st.warning("⚠️ This match has already been graded. Submitting again will overwrite historical stats.")
-            match_data = existing_results[selected_match_id]
+                    save_structured_match(match_id, home_team, away_team, kickoff_iso, display_str)
+                    st.success(f"Successfully scheduled: {display_str}")
+                    st.rerun()
+
+        st.markdown("---")
+        st.markdown("#### ⏳ Upcoming Scheduled Matches")
+        if not upcoming_admin_list:
+            st.info("No upcoming matches on the calendar.")
         else:
-            match_data = {}
-
-        # Render explicit statistical entry form fields
-        with st.form("results_entry_form"):
-            st.markdown(f"### Scoreboard: **{home}** vs **{away}**")
-
-            c_sc1, c_sc2 = st.columns(2)
-            with c_sc1:
-                home_score = st.number_input(f"{home} Goals", min_value=0, value=int(match_data.get("home_score", 0)), step=1)
-            with c_sc2:
-                away_score = st.number_input(f"{away} Goals", min_value=0, value=int(match_data.get("away_score", 0)), step=1)
-
-            # Automatically evaluate the winning team node
-            if home_score > away_score:
-                winner_prediction_value = home
-            elif away_score > home_score:
-                winner_prediction_value = away
-            else:
-                winner_prediction_value = "Draw"
-
-            st.info(f"👉 **Determined Outcome:** {winner_prediction_value}")
-
-            st.markdown("---")
-            st.markdown("##### 🏃‍♂️ Match Metrics & Event Logs")
-            st.caption("Separate multiple player names using commas (e.g., Messi, Neymar). Leave empty if none.")
-
-            # Set up list string fields comma-separated string formatting text fallbacks
-            def join_list(l): return ", ".join(l) if l else ""
-
-            home_scorers_raw = st.text_input(f"Goal Scorers for {home}:", value=join_list(match_data.get("home_scorers", [])))
-            away_scorers_raw = st.text_input(f"Goal Scorers for {away}:", value=join_list(match_data.get("away_scorers", [])))
-
-            st.markdown(" ")
-            yellow_cards_raw = st.text_input("Players Booked (Yellow Cards):", value=join_list(match_data.get("yellow_cards", [])))
-            red_cards_raw = st.text_input("Players Sent Off (Red Cards):", value=join_list(match_data.get("red_cards", [])))
-
-            st.markdown(" ")
-            motm_player = st.text_input("FIFA Official Man of the Match:", value=match_data.get("player_of_the_match", "")).strip()
-
-            if st.form_submit_button("💾 Finalize & Save Match Results"):
-                # Clean and parse text strings into structured lists
-                def parse_input(raw_str): return [p.strip() for p in raw_str.split(",") if p.strip()]
-
-                final_results = {
-                    "match_id": selected_match_id,
-                    "home_score": home_score,
-                    "away_score": away_score,
-                    "winning_team": winner_prediction_value,
-                    "home_scorers": parse_input(home_scorers_raw),
-                    "away_scorers": parse_input(away_scorers_raw),
-                    "yellow_cards": parse_input(yellow_cards_raw),
-                    "red_cards": parse_input(red_cards_raw),
-                    "player_of_the_match": motm_player
-                }
-
-                save_match_result(selected_match_id, final_results)
-                st.success(f"Results for match locked in successfully!")
-                st.rerun()
-
-    # -------------------------------------------------------------
-    # 5. PARTICIPANTS OVERVIEW
-    # -------------------------------------------------------------
-    st.markdown("---")
-    st.subheader("👥 Participants Overview")
-    
-    from src.db_service import get_all_users, get_pre_tournament_picks, get_daily_predictions
-    
-    all_users = get_all_users()
-    
-    if not all_users:
-        st.info("No participants found.")
-    else:
-        # Create a dataframe or list of data to display
-        participant_data = []
-        for email, user_info in all_users.items():
-            # Filter out admins
-            if "admin" in user_info.get("name", "").lower():
-                continue
-                
-            pre_t = get_pre_tournament_picks(email)
-            daily = get_daily_predictions(email)
-            
-            # Format daily match picks
-            match_picks = daily.get("teams", {})
-            # Extract just the team name
-            match_picks_str = ", ".join([f"{v}" for v in match_picks.values()])
-            
-            participant_data.append({
-                "Name": user_info.get("name"),
-                "Pre-T Teams": ", ".join(pre_t.get("teams", [])),
-                "Pre-T Players": ", ".join(pre_t.get("players", [])),
-                "Daily Players": ", ".join(daily.get("players", [])),
-                "Daily Match Picks": match_picks_str
-            })
-            
-        import pandas as pd
-        if participant_data:
-            st.table(pd.DataFrame(participant_data))
-        else:
-            st.info("No non-admin participants found.")
-
-    # -------------------------------------------------------------
-    # 4. COMPLETED ARCHIVE REFERENCE
-    # -------------------------------------------------------------
-    if completed_admin_list:
-        st.markdown(" ")
-        with st.expander("✅ View Completed Matches Timeline Reference", expanded=False):
-            for m in sorted_completed:
+            sorted_upcoming = sorted(upcoming_admin_list, key=lambda x: x.get("kickoff_time", ""))
+            for m in sorted_upcoming:
                 dt_obj = datetime.fromisoformat(m["kickoff_time"])
-                formatted_date = dt_obj.strftime("%b %d")
-                status = "📝 Graded" if m["id"] in existing_results else "⏳ Missing Results"
-                st.markdown(f"🏁 **[{formatted_date}] {m.get('display_string')}** — `{status}`")
+                formatted_date = dt_obj.strftime("%A, %b %d")
+                st.text(f"• [{formatted_date}] {m.get('display_string')}")
 
-    st.markdown("---")
-    st.subheader("💬 User Prediction Overrides (WhatsApp Backdoor)")
-    st.caption("Manually adjust or insert entries for friends who submitted via WhatsApp due to platform delays.")
+            """if st.button("🗑️ Clear Entire Match Schedule", type="primary"):
+                delete_all_matches()
+                st.success("All matches wiped out from the database configuration node.")
+                st.rerun()"""
 
-    from src.db_service import get_all_users, save_user_daily_override, get_daily_predictions
-    import firebase_admin.db as fdb
+        if completed_admin_list:
+            st.markdown("---")
+            with st.expander("✅ View Completed Matches Timeline Reference", expanded=False):
+                sorted_completed = sorted(completed_admin_list, key=lambda x: x.get("kickoff_time", ""))
+                for m in sorted_completed:
+                    dt_obj = datetime.fromisoformat(m["kickoff_time"])
+                    formatted_date = dt_obj.strftime("%b %d")
+                    status = "📝 Graded" if m["id"] in existing_results else "⏳ Missing Results"
+                    st.markdown(f"🏁 **[{formatted_date}] {m.get('display_string')}** — `{status}`")
 
-    all_users = get_all_users()
+    # -------------------------------------------------------------
+    # TAB 2: RESULTS & GRADING ENGINE
+    # -------------------------------------------------------------
+    with tab_grade:
+        st.subheader("⚽ Match Results & Grading Center")
+        if not completed_admin_list:
+            st.info("No completed matches found to grade.")
+        else:
+            sorted_completed = sorted(completed_admin_list, key=lambda x: x.get("kickoff_time", ""))
+            for m in sorted_completed:
+                m_id = m["id"]
+                m_data = existing_results.get(m_id, {})
+                home, away = m["home_team"], m["away_team"]
+                
+                # Summary display
+                dt = datetime.fromisoformat(m["kickoff_time"])
+                date_str = dt.strftime("%d/%m")
+                time_str = dt.strftime("%I:%M %p")
+                score_str = f"{m_data.get('home_score', '-')} - {m_data.get('away_score', '-')}" if m_id in existing_results else " - "
+                
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([2, 3, 1])
+                    c1.markdown(f"**{date_str}** {time_str}")
+                    c2.markdown(f"**{home}** {score_str} **{away}**")
+                    
+                    with c3.popover("Edit"):
+                        st.markdown(f"### Grade: {home} vs {away}")
+                        
+                        s_key = f'scorer_rows_{m_id}'
+                        c_key = f'card_rows_{m_id}'
+                        if s_key not in st.session_state: st.session_state[s_key] = [{'team': home, 'name': '', 'goals': 1}]
+                        if c_key not in st.session_state: st.session_state[c_key] = [{'team': home, 'name': '', 'type': 'Yellow'}]
 
-    if not all_users:
-        st.info("No registered users found to override.")
-    elif not current_matches:
-        st.info("No matches scheduled to map predictions against.")
-    else:
-        # 1. Global User Picker
-        user_options = {u["email"]: f"{u['name']} ({u['email']})" for u in all_users.values()}
-        selected_user_email = st.selectbox(
-            "👉 Select the Friend to Modify:",
-            options=list(user_options.keys()),
-            format_func=lambda x: user_options[x],
-            key="override_user_select"
-        )
+                        # Add buttons (outside form)
+                        c_a1, c_a2 = st.columns(2)
+                        if c_a1.button("➕ Add Scorer", key=f"add_s_{m_id}"): 
+                            st.session_state[s_key].append({'team': home, 'name': '', 'goals': 1})
+                            st.rerun()
+                        if c_a2.button("➕ Add Card", key=f"add_c_{m_id}"): 
+                            st.session_state[c_key].append({'team': home, 'name': '', 'type': 'Yellow'})
+                            st.rerun()
+                        
+                        with st.form(f"form_{m_id}"):
+                            # 1. Score
+                            with st.expander("1. Final Score", expanded=True):
+                                c_s1, c_s2 = st.columns(2)
+                                h_score = c_s1.number_input("Home Goals", min_value=0, value=int(m_data.get("home_score", 0)), step=1)
+                                a_score = c_s2.number_input("Away Goals", min_value=0, value=int(m_data.get("away_score", 0)), step=1)
+                                winner = home if h_score > a_score else (away if a_score > h_score else "Draw")
+                                st.info(f"Outcome: **{winner}**")
 
-        # Pull all current daily data for this specific user up front to use as safe states
-        user_existing_daily = get_daily_predictions(selected_user_email)
-        user_existing_teams = user_existing_daily.get("teams", {})
-        user_existing_players = user_existing_daily.get("players", ["", ""])
-        while len(user_existing_players) < 2: user_existing_players.append("")
+                            # 2. Metrics
+                            with st.expander("2. Match Metrics", expanded=False):
+                                st.markdown("##### Goal Scorers")
+                                for i, row in enumerate(st.session_state[s_key]):
+                                    c1, c2, c3 = st.columns([2, 2, 1])
+                                    row['team'] = c1.selectbox("Team", [home, away], index=[home, away].index(row['team']) if row['team'] in [home, away] else 0, key=f"st_{m_id}_{i}")
+                                    row['name'] = c2.text_input("Player", value=row['name'], key=f"sn_{m_id}_{i}")
+                                    row['goals'] = c3.number_input("Goals", min_value=1, value=row['goals'], key=f"sg_{m_id}_{i}")
+                                
+                                st.markdown("##### Discipline (Cards)")
+                                for i, row in enumerate(st.session_state[c_key]):
+                                    c1, c2, c3 = st.columns([2, 2, 1])
+                                    row['team'] = c1.selectbox("Team", [home, away], index=[home, away].index(row['team']) if row['team'] in [home, away] else 0, key=f"ct_{m_id}_{i}")
+                                    row['name'] = c2.text_input("Player", value=row['name'], key=f"cn_{m_id}_{i}")
+                                    row['type'] = c3.selectbox("Type", ["Yellow", "Red"], index=["Yellow", "Red"].index(row['type']) if row['type'] in ["Yellow", "Red"] else 0, key=f"cty_{m_id}_{i}")
 
-        # Create two separate workspace columns to isolate match choices from player lists
-        col_match, col_player = st.columns(2, gap="large")
+                            # 3. Highlights
+                            with st.expander("3. Highlights", expanded=False):
+                                motm = st.text_input("Man of the Match:", value=m_data.get("player_of_the_match", ""), key=f"motm_{m_id}").strip()
 
-        # -----------------------------------------------------------------
-        # COLUMN 1: ISOLATED MATCH-WINNER OVERRIDE FORM
-        # -----------------------------------------------------------------
-        with col_match:
-            st.markdown("##### ⚽ Part A: Override Specific Match Pick")
-            st.caption("This updates ONE specific match winner without touching player data.")
+                            # Save
+                            if st.form_submit_button("Save Results", type="primary"):
+                                h_scorers, a_scorers, yellow, red = [], [], [], []
+                                for r in st.session_state[s_key]:
+                                    if r['name']:
+                                        if r['team'] == home: h_scorers.extend([r['name']] * r['goals'])
+                                        else: a_scorers.extend([r['name']] * r['goals'])
+                                for r in st.session_state[c_key]:
+                                    if r['name']:
+                                        if r['type'] == "Yellow": yellow.append(r['name'])
+                                        else: red.append(r['name'])
+                                
+                                save_match_result(m_id, {
+                                    "match_id": m_id, "home_score": h_score, "away_score": a_score,
+                                    "winning_team": winner, "home_scorers": h_scorers,
+                                    "away_scorers": a_scorers, "yellow_cards": yellow,
+                                    "red_cards": red, "player_of_the_match": motm
+                                })
+                                st.success("Saved!")
+                                st.rerun()
 
-            all_matches_sorted = sorted(current_matches.values(), key=lambda x: x.get("kickoff_time", ""))
-            match_options_map = {m["id"]: m["display_string"] for m in all_matches_sorted}
 
-            selected_match_override_id = st.selectbox(
-                "Select the Target Match:",
-                options=list(match_options_map.keys()),
-                format_func=lambda x: match_options_map[x],
-                key="override_match_select"
-            )
+    # -------------------------------------------------------------
+    # TAB 3: PARTICIPANTS
+    # -------------------------------------------------------------
+    with tab_part:
+        st.subheader("👥 Participants Overview")
+        from src.db_service import get_all_users, get_pre_tournament_picks, get_daily_predictions
+        all_users = get_all_users()
+        if not all_users:
+            st.info("No participants found.")
+        else:
+            participant_data = []
+            for email, user_info in all_users.items():
+                if "admin" in user_info.get("name", "").lower(): continue
+                pre_t, daily = get_pre_tournament_picks(email), get_daily_predictions(email)
+                participant_data.append({
+                    "Name": user_info.get("name"),
+                    "Pre-T Teams": ", ".join(pre_t.get("teams", [])),
+                    "Pre-T Players": ", ".join(pre_t.get("players", [])),
+                    "Daily Players": ", ".join(daily.get("players", [])),
+                    "Daily Match Picks": ", ".join([f"{v}" for v in daily.get("teams", {}).values()])
+                })
+            import pandas as pd
+            if participant_data: st.table(pd.DataFrame(participant_data))
 
-            target_match = next(m for m in all_matches_sorted if m["id"] == selected_match_override_id)
-            home = target_match.get("home_team", "Home")
-            away = target_match.get("away_team", "Away")
-
-            saved_override_pick = user_existing_teams.get(selected_match_override_id)
-            team_options = [home, away, "Draw"]
-            default_team_idx = team_options.index(saved_override_pick) if saved_override_pick in team_options else 0
-
-            with st.form("whatsapp_match_override_form"):
-                chosen_winner = st.selectbox(
-                    f"Predicted Outcome for {home} vs {away}:",
-                    options=team_options,
-                    index=default_team_idx
-                )
-
-                if st.form_submit_button("💾 Force Update This Match Selection"):
-                    # Safe update: Fetch current, insert single winner key, push back
-                    cleaned_email = selected_user_email.replace(".", "_")
-                    ref = fdb.reference(f"daily_predictions/{cleaned_email}")
-
-                    user_existing_teams[selected_match_override_id] = chosen_winner
-
-                    ref.update({
-                        "teams": user_existing_teams,
-                        "submitted_at": f"{datetime.now().strftime('%Y-%m-%d %I:%M %p')} (Admin Match Override)"
-                    })
-                    st.success(f"Match selection updated safely for {selected_user_email}!")
-                    st.rerun()
-
-        # -----------------------------------------------------------------
-        # COLUMN 2: ISOLATED GLOBAL DAILY PLAYER OVERRIDE FORM
-        # -----------------------------------------------------------------
-        with col_player:
-            st.markdown("##### 🏃‍♂️ Part B: Override Daily Player Lock-Ins")
-            st.caption("This modifies the user's 2 global player picks for the entire matchday.")
-
-            with st.form("whatsapp_player_override_form"):
-                p1 = st.text_input("Daily Player Pick 1:", value=user_existing_players[0])
-                p2 = st.text_input("Daily Player Pick 2:", value=user_existing_players[1])
-
-                if st.form_submit_button("🚀 Force Update Daily Players"):
-                    cleaned_players = [p.strip() for p in [p1, p2] if p.strip()]
-                    if len(cleaned_players) != 2:
-                        st.error("Validation Error: Both text boxes must contain a valid player name.")
-                        return
-
-                    cleaned_email = selected_user_email.replace(".", "_")
-                    ref = fdb.reference(f"daily_predictions/{cleaned_email}")
-
-                    ref.update({
-                        "players": cleaned_players,
-                        "submitted_at": f"{datetime.now().strftime('%Y-%m-%d %I:%M %p')} (Admin Player Override)"
-                    })
-                    st.success(f"Daily player choices successfully locked for {selected_user_email}!")
-                    st.rerun()
+    # -------------------------------------------------------------
+    # TAB 5: LEADERBOARD
+    # -------------------------------------------------------------
+    with tab_leaderboard:
+        st.subheader("🏆 Global Leaderboard")
+        render_leaderboard_table()

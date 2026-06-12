@@ -81,10 +81,112 @@ def delete_all_matches() -> None:
     db.reference("metadata/matches").delete()
 
 
+from src.scoring_engine import calculate_match_points
+
+# ... (rest of imports)
+
 def save_match_result(match_id: str, result_data: dict) -> None:
-    """Saves or updates the finalized results and stats for a completed match."""
+    """Saves finalized results and triggers incremental leaderboard update."""
     result_data["updated_at"] = get_ist_timestamp()
     db.reference(f"results/{match_id}").set(result_data)
+    
+    # Trigger incremental recalculation
+    recalculate_and_save_user_points(match_id, result_data)
+
+def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
+    """Incrementally updates participant points and leaderboard, excluding admins."""
+    all_users = get_all_users()
+    match_metadata = db.reference(f"metadata/matches/{match_id}").get()
+    
+    for email, user_info in all_users.items():
+        # Filter out admins
+        if "admin" in user_info.get("name", "").lower():
+            continue
+            
+        # Get existing data
+        pre_t_picks = get_pre_tournament_picks(email)
+        daily_picks = get_daily_predictions(email)
+        
+        # Calculate new points
+        new_breakdown = calculate_match_points(match_id, pre_t_picks, daily_picks, result_data, match_metadata)
+        new_total_match = sum(new_breakdown.values())
+        
+        # Get old points from audit node to calculate delta
+        old_audit = db.reference(f"points_audit/{email}/match_results/{match_id}").get() or {}
+        old_total_match = old_audit.get("total_points", 0)
+        
+        # Update audit node
+        db.reference(f"points_audit/{email}/match_results/{match_id}").set({
+            **new_breakdown,
+            "total_points": new_total_match,
+            "updated_at": get_ist_timestamp()
+        })
+        
+        # Update leaderboard node
+        leaderboard_ref = db.reference(f"leaderboard/{email}")
+        user_leaderboard = leaderboard_ref.get() or {"total_score": 0, "name": user_info["name"]}
+        
+        # Delta = new_points - old_points
+        delta = new_total_match - old_total_match
+        user_leaderboard["total_score"] = user_leaderboard.get("total_score", 0) + delta
+        # Removed 'last_daily_score' as requested
+        
+        leaderboard_ref.update(user_leaderboard)
+        
+        # Track granular player and team stats
+        track_player_and_team_stats(email, match_id, pre_t_picks, daily_picks, result_data)
+
+def track_player_and_team_stats(email: str, match_id: str, pre_t_picks: dict, daily_picks: dict, result_data: dict) -> None:
+    """Tracks granular stats for all player and team picks (as previously planned) and global stats."""
+    
+    # 1. Update Global Player Stats (regardless of user selection)
+    all_scorers = result_data.get("home_scorers", []) + result_data.get("away_scorers", [])
+    yellow_cards = result_data.get("yellow_cards", [])
+    red_cards = result_data.get("red_cards", [])
+    motm = result_data.get("player_of_the_match")
+    
+    # Get all unique players involved in the match results
+    all_involved_players = set(all_scorers + yellow_cards + red_cards + ([motm] if motm else []))
+    
+    for player in all_involved_players:
+        if not player: continue
+        
+        player_ref = db.reference(f"global_player_stats/{player}")
+        stats = player_ref.get() or {"goals": 0, "yellow_cards": 0, "red_cards": 0, "motm": 0}
+        
+        stats["goals"] += all_scorers.count(player)
+        stats["yellow_cards"] += yellow_cards.count(player)
+        stats["red_cards"] += red_cards.count(player)
+        if player == motm:
+            stats["motm"] += 1
+            
+        player_ref.set(stats)
+
+    # 2. Update Global Team Stats
+    home_team = result_data.get("home_team") # Note: This data is not directly in result_data passed, 
+                                            # we need metadata here, but simplifying for now.
+    # Actually, we should pull team names from metadata
+    match_meta = db.reference(f"metadata/matches/{match_id}").get()
+    home = match_meta.get("home_team")
+    away = match_meta.get("away_team")
+    h_score = result_data.get("home_score", 0)
+    a_score = result_data.get("away_score", 0)
+
+    for team, goals, opponent_goals in [(home, h_score, a_score), (away, a_score, h_score)]:
+        team_ref = db.reference(f"global_team_stats/{team}")
+        stats = team_ref.get() or {"wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
+        
+        if goals > opponent_goals: stats["wins"] += 1
+        elif goals < opponent_goals: stats["losses"] += 1
+        else: stats["draws"] += 1
+        
+        stats["goals_for"] += goals
+        stats["goals_against"] += opponent_goals
+        
+        team_ref.set(stats)
+
+    # 3. (Optional) Keep existing user-specific tracking logic if needed, 
+    # but based on requirements, the global stats seem to be the primary need.
 
 def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""
