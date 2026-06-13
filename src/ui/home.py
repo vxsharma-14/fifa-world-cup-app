@@ -5,7 +5,7 @@ from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get
                             get_user_match_breakdown, get_match_points_breakdown, clean_email_key)
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
-from datetime import datetime
+from datetime import datetime, timedelta
 import zoneinfo
 
 @st.dialog("📊 Global Tournament Leaderboard")
@@ -199,6 +199,21 @@ def render_home_summary_dashboard(email: str) -> None:
             st.markdown("---")
 
         # 2. Render Upcoming Submissions Section
+        # Calculate time to next match cutoff (kickoff - 15 mins)
+        if upcoming_list:
+            next_date = (datetime.strptime(selected_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            next_match = min(upcoming_list, key=lambda x: x.get("kickoff_time", ""))
+            kickoff_dt = datetime.fromisoformat(next_match.get("kickoff_time", ""))
+            cutoff_dt = kickoff_dt - timedelta(minutes=15)
+            time_remaining = cutoff_dt - current_time
+            
+            if time_remaining.total_seconds() > 0:
+                hours, remainder = divmod(int(time_remaining.total_seconds()), 3600)
+                minutes, _ = divmod(remainder, 60)
+                st.warning(f"Predictions for {next_date} locks in **{hours}h {minutes}m**", icon="⏰")
+            else:
+                st.error("⚠️ Match prediction locked!", icon="🔒")
+
         st.markdown("##### ⏳ Upcoming Submissions")
         
         if not upcoming_list:
@@ -233,7 +248,7 @@ def render_home_summary_dashboard(email: str) -> None:
             if upcoming_daily_players:
                 # Handle both string names and dictionary objects
                 player_names = [p.get('name', 'Unknown') if isinstance(p, dict) else p for p in upcoming_daily_players]
-                st.info(f"**Daily Impact Players:** {', '.join(player_names)}", icon="⭐")
+                st.info(f"**Daily Impact Players:** {', '.join(player_names)}")
             
             # Card Grid
             cols = st.columns(2)
