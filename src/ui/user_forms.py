@@ -162,5 +162,10 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
         if st.form_submit_button("Submit Predictions", type="primary"):
             player_list = [p for p in daily_player_inputs if p['name'].strip()]
             save_daily_predictions(email, target_date, selected_winners, player_list)
+            
             st.success(f"Predictions saved for {target_date}!")
+            import time
+            time.sleep(1) # Give user a second to read the success message
+            
+            st.session_state["current_page"] = "🏠 Dashboard Home"
             st.rerun()
