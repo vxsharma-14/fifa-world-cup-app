@@ -190,6 +190,14 @@ def get_match_results() -> dict:
     return db.reference("results").get() or {}
 
 
+def get_user_match_breakdown(email: str, date: str, match_id: str) -> dict:
+    """Retrieves a user's points breakdown for a specific match."""
+    return db.reference(f"user_points/{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").get() or {}
+
+def get_match_points_breakdown(match_id: str) -> dict:
+    """Retrieves granular points breakdown (player/team) for a specific match."""
+    return db.reference(f"match_points/{match_id}").get() or {}
+
 def get_all_users() -> dict:
     """Fetches all registered users from the system."""
     return db.reference("users").get() or {}

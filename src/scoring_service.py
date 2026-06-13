@@ -8,6 +8,7 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     """Calculates and stores points for players/teams for a specific match."""
     points = {
         "ist_date": date,
+        "scoring_stage": "league",
         "team_points": {},
         "player_points": {}
     }
@@ -19,14 +20,14 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     
     # Points logic: GD bonus (10 * diff) + 10 base pts for winner
     if diff > 0: # Home win
-        points["team_points"][home_team] = (diff * 10) + 10
-        points["team_points"][away_team] = (diff * 10) * -1
+        points["team_points"][home_team] = {"win": 10, "goaldiff": (diff * 10), "total": (diff * 10) + 10}
+        points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * 10) * -1, "total": (diff * 10) * -1}
     elif diff < 0: # Away win
-        points["team_points"][home_team] = (diff * 10)
-        points["team_points"][away_team] = (abs(diff) * 10) + 10
+        points["team_points"][home_team] = {"win": 0, "goaldiff": (diff * 10), "total": (diff * 10)}
+        points["team_points"][away_team] = {"win": 10, "goaldiff": (abs(diff) * 10), "total": (abs(diff) * 10) + 10}
     else: # Draw
-        points["team_points"][home_team] = 0
-        points["team_points"][away_team] = 0
+        points["team_points"][home_team] = {"win": 0, "goaldiff": 0, "total": 0}
+        points["team_points"][away_team] = {"win": 0, "goaldiff": 0, "total": 0}
     
     # Calculate Player points
     all_scorers = match_result.get("home_scorers", []) + match_result.get("away_scorers", [])
@@ -34,8 +35,10 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     all_involved = set(all_scorers + ([motm] if motm else []))
     
     for player in all_involved:
-        p_pts = (all_scorers.count(player) * 10) + (20 if player == motm else 0)
-        points["player_points"][player] = p_pts
+        goals = all_scorers.count(player)
+        motm_bonus = 20 if player == motm else 0
+        p_pts = (goals * 10) + motm_bonus
+        points["player_points"][player] = {"goals": goals * 10, "motm": motm_bonus, "total": p_pts}
         
     db.reference(f"match_points/{match_id}").set(points)
 
@@ -46,6 +49,11 @@ def refresh_leaderboard() -> None:
     all_match_points = db.reference("match_points").get() or {}
     user_points_root = db.reference("user_points")
     
+    # Helper for points extraction
+    def get_total(d: Any) -> int:
+        if isinstance(d, dict): return d.get("total", 0)
+        return d if isinstance(d, int) else 0
+
     # 2. Iterate through each match in match_points
     for match_id, m_points in all_match_points.items():
         date = m_points.get("ist_date")
@@ -54,23 +62,30 @@ def refresh_leaderboard() -> None:
         for email, user_info in users.items():
             if "admin" in user_info.get("name", "").lower(): continue
             
-            # Fetch predictions for this date
+            # Fetch predictions and pre-t picks
             daily = get_daily_predictions(email, date)
+            pre_t = get_pre_tournament_picks(email)
+            pre_t_teams = pre_t.get("teams", [])
+            pre_t_players = pre_t.get("players", [])
             
             # Calculate user points
             team_pick = daily.get('teams', {}).get(match_id)
             player_picks = daily.get('players', [])
             
-            team_pts = m_points.get('team_points', {}).get(team_pick, 0)
-            player_pts = sum(m_points.get('player_points', {}).get(p, 0) for p in player_picks)
+            team_pts = get_total(m_points.get('team_points', {}).get(team_pick, 0))
+            player_pts = sum(get_total(m_points.get('player_points', {}).get(p, 0)) for p in player_picks)
+            
+            # Check for multiplier
+            is_multiplier_applied = (team_pick in pre_t_teams) or any(p in pre_t_players for p in player_picks)
             
             # 4. Save granular audit for this match
             user_points_root.child(f"{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").set({
                 "team_points": team_pts,
-                "player_points": player_pts
+                "player_points": player_pts,
+                "multiplier_applied": is_multiplier_applied
             })
     
-    # 2. Aggregate totals
+    # 5. Aggregate totals
     for email, user_info in users.items():
         if "admin" in user_info.get("name", "").lower(): continue
 
