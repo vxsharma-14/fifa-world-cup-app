@@ -2,7 +2,7 @@
 
 import streamlit as st
 from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_ist_date_key,
-                            get_user_match_breakdown, get_match_points_breakdown)
+                            get_user_match_breakdown, get_match_points_breakdown, clean_email_key)
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime
@@ -84,18 +84,6 @@ def render_home_summary_dashboard(email: str) -> None:
     with col2:
         st.markdown("### 📅 Match Status Tracking")
         
-        # Temporary debug logging
-        debug_date = get_ist_date_key()
-        debug_email_key = clean_email_key(email)
-        print(f"DEBUG: Fetching daily predictions for {debug_email_key} on {debug_date}")
-        print(f"DEBUG: Path: daily_predictions/{debug_email_key}/{debug_date}")
-
-        daily_t = get_daily_predictions(email, get_ist_date_key())
-        print(f"DEBUG: Fetched data: {daily_t}")
-        
-        upcoming_teams_map = daily_t.get("teams", {})
-        upcoming_players = daily_t.get("players", [])
-
         # Get active time context
         current_time = datetime.now(zoneinfo.ZoneInfo("Asia/Kolkata"))
         raw_matches = get_scheduled_matches()
@@ -236,6 +224,17 @@ def render_home_summary_dashboard(email: str) -> None:
             
             day_upcoming = sorted(upcoming_by_date[selected_up_date], key=lambda x: x.get("kickoff_time", ""))
             
+            # Fetch predictions for the SELECTED upcoming date dynamically
+            match_preds = get_daily_predictions(email, selected_up_date)
+            upcoming_teams_map = match_preds.get("teams", {})
+            upcoming_daily_players = match_preds.get("players", [])
+            
+            # Display Daily Impact Players
+            if upcoming_daily_players:
+                # Handle both string names and dictionary objects
+                player_names = [p.get('name', 'Unknown') if isinstance(p, dict) else p for p in upcoming_daily_players]
+                st.info(f"**Daily Impact Players:** {', '.join(player_names)}", icon="⭐")
+            
             # Card Grid
             cols = st.columns(2)
             for i, match in enumerate(day_upcoming):
@@ -243,6 +242,7 @@ def render_home_summary_dashboard(email: str) -> None:
                     kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", ""))
                     display_time = kickoff_dt.strftime("%I:%M %p")
                     match_id = match.get("id")
+                    
                     match_name = match.get("display_string", "").split(" | ")[-1]
                     prediction = upcoming_teams_map.get(match_id, "Not Selected")
 
