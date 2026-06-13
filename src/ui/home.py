@@ -51,29 +51,34 @@ def render_home_summary_dashboard(email: str) -> None:
 
     st.markdown("---")
 
-    col1, col2 = st.columns(2, gap="large")
+    col1, col2 = st.columns([1, 2], gap="large")
 
     with col1:
         st.markdown("### 🎯 Your Active Lock-Ins")
         pre_t = get_pre_tournament_picks(email)
+        teams = pre_t.get("teams", [])
+        players = pre_t.get("players", [])
 
-        sub_c1, sub_c2 = st.columns(2)
-        with sub_c1:
-            st.markdown("**Pre-T Teams:**")
-            teams = pre_t.get("teams", [])
+        with st.container(border=True):
+            st.markdown("### 🛡️ Locked Teams")
             if teams:
                 for team in teams:
-                    st.markdown(f"• `{team}`")
+                    st.markdown(f"• **{team}**")
             else:
-                st.caption("⚠️ No teams locked in yet.")
-        with sub_c2:
-            st.markdown("**Pre-T Players:**")
-            players = pre_t.get("players", [])
+                st.caption("No teams locked.")
+        
+        with st.container(border=True):
+            st.markdown("### 👤 Locked Players")
             if players:
                 for player in players:
-                    st.markdown(f"• `{player}`")
+                    # Handle both string names and dictionary objects
+                    if isinstance(player, dict):
+                        display_text = f"{player.get('name', 'Unknown')} ({player.get('team', '?')})"
+                    else:
+                        display_text = player
+                    st.markdown(f"• **{display_text}**")
             else:
-                st.caption("⚠️ No players locked in yet.")
+                st.caption("No players locked.")
 
     with col2:
         st.markdown("### 📅 Match Status Tracking")
@@ -104,34 +109,89 @@ def render_home_summary_dashboard(email: str) -> None:
         # 1. Render Completed Matches Section
         if completed_list:
             st.markdown("##### ✅ Completed Matches")
-            for match in sorted(completed_list, key=lambda x: x.get("kickoff_time", "")):
+            
+            # Table Header
+            c1, c2, c3, c4 = st.columns([2, 3, 2, 1])
+            c1.caption("Date/Time")
+            c2.caption("Match")
+            c3.caption("Prediction")
+            c4.caption("Action")
+            
+            for match in sorted(completed_list, key=lambda x: x.get("kickoff_time", ""), reverse=True):
+                kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", ""))
+                display_time = kickoff_dt.strftime("%b %d, %I:%M %p")
+                
+                # Fetch result data
                 match_id = match.get("id")
-                # Get the date for this specific match to lookup predictions
-                match_date = get_ist_date_key(datetime.fromisoformat(match.get("kickoff_time", "")))
-                match_preds = get_daily_predictions(email, match_date)
-                saved_winner = match_preds.get("teams", {}).get(match_id, "None Submitted")
-                st.markdown(f"🏁 *{match.get('display_string')}* ➔ **Your Pick:** `{saved_winner}`")
+                results = match.get("results", {})
+                
+                # Format Match display (TeamA Score - Score TeamB)
+                match_name = match.get("display_string", "").split(" | ")[-1]
+                if results:
+                    score_str = f"{results.get('home_score', '-')} - {results.get('away_score', '-')}"
+                    match_display = f"{match.get('home_team')} {score_str} {match.get('away_team')}"
+                else:
+                    match_display = match_name
+
+                # Fetch prediction
+                match_date_key = get_ist_date_key(kickoff_dt)
+                match_preds = get_daily_predictions(email, match_date_key)
+                prediction = match_preds.get("teams", {}).get(match_id, "None")
+                
+                # Determine winner from results for status icon
+                # Explicitly accessing 'winning_team' field from results node
+                actual_winner = results.get("winning_team")
+
+                # Status icon logic
+                if prediction != "None" and actual_winner:
+                    is_correct = (str(prediction).strip() == str(actual_winner).strip())
+                    status_icon = " ✅" if is_correct else " ❌"
+                else:
+                    status_icon = "" 
+
+                c1, c2, c3, c4 = st.columns([2, 3, 2, 1])
+                c1.text(display_time)
+                c2.text(match_display)
+                c3.text(f"{prediction}{status_icon}")
+                
+                # Placeholder popover for View Picks
+                with c4.popover("View"):
+                    st.write(f"Match: {match_display}")
+                    st.write(f"Your Pick: {prediction}")
+                    st.write("Points: TBD")
             st.markdown("---")
 
         # 2. Render Upcoming Submissions Section
         st.markdown("##### ⏳ Tonight's Submissions")
-        if not upcoming_teams_map:
-            st.warning("🚨 You haven't locked in predictions for tonight's upcoming games!")
-            if upcoming_list:
-                for match in sorted(upcoming_list, key=lambda x: x.get("kickoff_time", "")):
-                    st.markdown(f"⏳ *{match.get('display_string')}*")
-            st.markdown(" ")
-            if st.button("📝 Click Here to Enter Predictions Now", use_container_width=True, type="primary"):
-                st.session_state["current_page"] = "📝 Prediction Entry Forms"
-                st.rerun()
+        
+        if not upcoming_list:
+            st.info("No further matches scheduled for today.")
         else:
-            if not upcoming_list:
-                st.info("No further matches scheduled for today.")
-            else:
-                for match in sorted(upcoming_list, key=lambda x: x.get("kickoff_time", "")):
-                    match_id = match.get("id")
-                    winner = upcoming_teams_map.get(match_id, "Not Selected")
-                    st.markdown(f"• {match.get('display_string')} ➔ **Your Pick:** `{winner}`")
-
-            if upcoming_players:
-                st.markdown(f"**Daily Impact Players:** `{', '.join(upcoming_players)}`")
+            # Table Header
+            c1, c2, c3 = st.columns([2, 3, 2])
+            c1.caption("Date/Time")
+            c2.caption("Match")
+            c3.caption("Your Prediction")
+            
+            for match in sorted(upcoming_list, key=lambda x: x.get("kickoff_time", "")):
+                match_id = match.get("id")
+                kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", ""))
+                display_time = kickoff_dt.strftime("%I:%M %p")
+                
+                # Match display
+                match_name = match.get("display_string", "").split(" | ")[-1]
+                
+                # Get current prediction
+                prediction = upcoming_teams_map.get(match_id, "Not Selected")
+                
+                c1, c2, c3 = st.columns([2, 3, 2])
+                c1.text(display_time)
+                c2.text(match_name)
+                c3.text(prediction)
+            
+            if not upcoming_teams_map:
+                st.warning("🚨 You haven't locked in predictions for tonight's upcoming games!")
+                st.markdown(" ")
+                if st.button("📝 Click Here to Enter Predictions Now", use_container_width=True, type="primary"):
+                    st.session_state["current_page"] = "📝 Prediction Entry Forms"
+                    st.rerun()
