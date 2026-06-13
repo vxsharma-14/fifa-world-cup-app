@@ -1,7 +1,8 @@
 """UI component rendering the landing dashboard summary for logged-in users."""
 
 import streamlit as st
-from src.db_service import get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_ist_date_key
+from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_ist_date_key,
+                            get_user_match_breakdown, get_match_points_breakdown)
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime
@@ -152,13 +153,52 @@ def render_home_summary_dashboard(email: str) -> None:
                 c1, c2, c3, c4 = st.columns([2, 3, 2, 1])
                 c1.text(display_time)
                 c2.text(match_display)
-                c3.text(f"{prediction}{status_icon}")
+                c3.text(f"{prediction} {status_icon}")
                 
-                # Placeholder popover for View Picks
+                # Popover for View Picks
                 with c4.popover("View"):
                     st.write(f"Match: {match_display}")
                     st.write(f"Your Pick: {prediction}")
-                    st.write("Points: TBD")
+                    
+                    # 1. Fetch user breakdown (totals)
+                    user_breakdown = get_user_match_breakdown(email, match_date_key, match_id)
+                    # 2. Fetch global granular breakdown
+                    global_breakdown = get_match_points_breakdown(match_id)
+                    # 3. Re-fetch daily predictions to get specific players picked for this match
+                    match_daily_preds = get_daily_predictions(email, match_date_key)
+                    match_daily_players = match_daily_preds.get('players', [])
+
+                    if user_breakdown and global_breakdown:
+                        st.markdown("**Points Breakdown:**")
+                        
+                        # Display Team breakdown
+                        t_pts = user_breakdown.get('team_points', 0)
+                        st.write(f"**Team Points: {t_pts}**")
+                        # Drill down into global match data for the specific team breakdown
+                        team_details = global_breakdown.get('team_points', {})
+                        if prediction in team_details:
+                            td = team_details[prediction]
+                            st.write(f"- Win: {td.get('win', 0)} Goal Diff: {td.get('goaldiff', 0)}")
+
+                        # Display Player breakdown
+                        p_pts = user_breakdown.get('player_points', 0)
+                        st.write(f"**Player Points: {p_pts}**")
+
+                        # Drill down into global match data for the specific player breakdown
+                        player_details = global_breakdown.get('player_points', {})
+                        for p_name in match_daily_players:
+                             if p_name in player_details:
+                                 pd = player_details[p_name]
+                                 st.write(f"- {p_name}: Goals {pd.get('goals',0)} MotM{pd.get('motm',0)}")
+
+                        total = t_pts + p_pts
+                        st.divider()
+                        st.write(f"**Total Points: {total}**")
+                        
+                        if user_breakdown.get('multiplier_applied'):
+                            st.caption("✅ Multiplier applied to this match.")
+                    else:
+                        st.write("Breakdown not available.")
             st.markdown("---")
 
         # 2. Render Upcoming Submissions Section
