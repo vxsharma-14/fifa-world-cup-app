@@ -3,7 +3,7 @@
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, get_daily_predictions, 
-    get_matches_by_date, get_match_results, get_ist_date_key
+    get_matches_by_date, get_match_results, get_pt_date_key
 )
 from src.scoring_engine import calculate_match_points
 

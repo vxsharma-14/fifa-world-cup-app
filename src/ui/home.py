@@ -1,7 +1,7 @@
 """UI component rendering the landing dashboard summary for logged-in users."""
 
 import streamlit as st
-from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_ist_date_key,
+from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_pt_date_key,
                             get_user_match_breakdown, get_match_points_breakdown, clean_email_key)
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
@@ -85,7 +85,7 @@ def render_home_summary_dashboard(email: str) -> None:
         st.markdown("### 📅 Match Status Tracking")
         
         # Get active time context
-        current_time = datetime.now(zoneinfo.ZoneInfo("Asia/Kolkata"))
+        current_time = datetime.now(zoneinfo.ZoneInfo("US/Pacific"))
         raw_matches = get_scheduled_matches()
 
         upcoming_list = []
@@ -112,7 +112,7 @@ def render_home_summary_dashboard(email: str) -> None:
             matches_by_date = {}
             for match in completed_list:
                 kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", ""))
-                date_key = get_ist_date_key(kickoff_dt)
+                date_key = get_pt_date_key(kickoff_dt)
                 if date_key not in matches_by_date:
                     matches_by_date[date_key] = []
                 matches_by_date[date_key].append(match)
@@ -162,7 +162,7 @@ def render_home_summary_dashboard(email: str) -> None:
                     # Card Layout
                     with st.container(border=True):
                         c1, c2 = st.columns([4, 1])
-                        c1.caption(f"{display_time}")
+                        c1.caption(f"{display_time} (PT)")
                         with c2.popover("View"):
                             st.write(f"Match: {match_display}")
                             st.write(f"Your Pick: {prediction}")
@@ -201,7 +201,6 @@ def render_home_summary_dashboard(email: str) -> None:
         # 2. Render Upcoming Submissions Section
         # Calculate time to next match cutoff (kickoff - 15 mins)
         if upcoming_list:
-            next_date = (datetime.strptime(selected_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
             next_match = min(upcoming_list, key=lambda x: x.get("kickoff_time", ""))
             kickoff_dt = datetime.fromisoformat(next_match.get("kickoff_time", ""))
             cutoff_dt = kickoff_dt - timedelta(minutes=15)
@@ -210,7 +209,6 @@ def render_home_summary_dashboard(email: str) -> None:
             if time_remaining.total_seconds() > 0:
                 hours, remainder = divmod(int(time_remaining.total_seconds()), 3600)
                 minutes, _ = divmod(remainder, 60)
-                st.warning(f"Predictions for {next_date} locks in **{hours}h {minutes}m**", icon="⏰")
             else:
                 st.error("⚠️ Match prediction locked!", icon="🔒")
 
@@ -223,7 +221,7 @@ def render_home_summary_dashboard(email: str) -> None:
             upcoming_by_date = {}
             for match in upcoming_list:
                 kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", ""))
-                date_key = get_ist_date_key(kickoff_dt)
+                date_key = get_pt_date_key(kickoff_dt)
                 if date_key not in upcoming_by_date:
                     upcoming_by_date[date_key] = []
                 upcoming_by_date[date_key].append(match)
@@ -236,7 +234,7 @@ def render_home_summary_dashboard(email: str) -> None:
                 options=sorted_upcoming_dates,
                 key="upcoming_date_selector"
             )
-            
+            st.warning(f"Predictions for {selected_up_date} locks in **{hours}h {minutes}m**", icon="⏰")
             day_upcoming = sorted(upcoming_by_date[selected_up_date], key=lambda x: x.get("kickoff_time", ""))
             
             # Fetch predictions for the SELECTED upcoming date dynamically
@@ -262,7 +260,7 @@ def render_home_summary_dashboard(email: str) -> None:
                     prediction = upcoming_teams_map.get(match_id, "Not Selected")
 
                     with st.container(border=True):
-                        st.caption(f"{display_time}")
+                        st.caption(f"{display_time} (PT)")
                         st.markdown(f"**{match_name}**")
                         st.markdown(f"Prediction: `{prediction}`")
 

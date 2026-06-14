@@ -5,13 +5,13 @@ import zoneinfo
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, save_pre_tournament_picks,
-    get_daily_predictions, save_daily_predictions, get_ist_date_key
+    get_daily_predictions, save_daily_predictions, get_pt_date_key
 )
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
-    """Processes upcoming match predictions, filtering out graded matches and locking by IST."""
-    IST = zoneinfo.ZoneInfo("Asia/Kolkata")
-    now_ist = datetime.now(IST)
+    """Processes upcoming match predictions, filtering out graded matches and locking by PT."""
+    PT = zoneinfo.ZoneInfo("US/Pacific")
+    now_pt = datetime.now(PT)
     
     st.subheader("📅 Predictions Dashboard")
 
@@ -46,10 +46,10 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
         
         # Find earliest match to determine cutoff
         earliest_match = min(matches_on_date.values(), key=lambda x: x['kickoff_time'])
-        kickoff_dt = datetime.fromisoformat(earliest_match['kickoff_time']).astimezone(IST)
+        kickoff_dt = datetime.fromisoformat(earliest_match['kickoff_time']).astimezone(PT)
         cutoff_dt = kickoff_dt - timedelta(minutes=15)
         
-        if now_ist < cutoff_dt:
+        if now_pt < cutoff_dt:
             target_date = date
             break
             
@@ -66,8 +66,6 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     existing_teams_map = existing.get("teams", {})
     existing_players = existing.get("players", [{'name': '', 'team': ''} for _ in range(2)])
     
-    # ... (the rest of the form rendering logic using target_date and active_matches)
-        
     # Process existing_players to ensure they are dictionaries
     processed_players = []
     for p in existing_players:
@@ -113,14 +111,14 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
                 home, away = match['home_team'], match['away_team']
                 
                 # Compact display string
-                kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", "")).astimezone(IST)
-                display_label = f"{kickoff_dt.strftime('%b %d, %I:%M %p')} | {home} vs {away}"
+                kickoff_dt = datetime.fromisoformat(match.get("kickoff_time", "")).astimezone(PT)
+                display_label = f"{kickoff_dt.strftime('%b %d, %I:%M %p')} (PT) | {home} vs {away}"
                 
                 # Logic: If Pre-T team is playing, auto-lock
                 is_pre_t_match = home in pre_t_teams or away in pre_t_teams
                 
-                # Automated Cutoff (15 mins prior to kickoff in IST)
-                is_locked = now_ist >= (kickoff_dt - timedelta(minutes=15))
+                # Automated Cutoff (15 mins prior to kickoff in PT)
+                is_locked = now_pt >= (kickoff_dt - timedelta(minutes=15))
                 
                 # Determine winner
                 if is_pre_t_match:

@@ -4,6 +4,9 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from firebase_admin import db
 
+# US Pacific Time (PDT) is UTC-7
+PT_OFFSET = timedelta(hours=-7)
+
 def hash_password(password: str) -> str:
     """Hashes passwords using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
@@ -12,11 +15,11 @@ def clean_email_key(email: str) -> str:
     """Replaces invalid '.' characters with '_' for Firebase keys."""
     return email.replace(".", "_")
 
-def get_ist_timestamp() -> str:
-    """Generates current timestamp formatted in Indian Standard Time (IST)."""
+def get_pt_timestamp() -> str:
+    """Generates current timestamp formatted in Pacific Time (PT)."""
     utc_now = datetime.now(timezone.utc)
-    ist_now = utc_now + timedelta(hours=5, minutes=30)
-    return ist_now.strftime("%Y-%m-%d %I:%M:%S %p IST")
+    pt_now = utc_now + PT_OFFSET
+    return pt_now.strftime("%Y-%m-%d %I:%M:%S %p PT")
 
 def get_user_data(email: str) -> dict | None:
     """Fetches user record by email."""
@@ -34,9 +37,6 @@ def reset_user_password(email: str, generic_password: str = "123456") -> None:
     """Admin tool to override a user's password."""
     db.reference(f"users/{clean_email_key(email)}/password_hash").set(hash_password(generic_password))
 
-from datetime import datetime
-# ... (rest of imports)
-
 def get_scheduled_matches() -> dict:
     """Fetches all scheduled matches across all dates, returns a flat dict of all matches."""
     all_dates_ref = db.reference("metadata").get() or {}
@@ -50,18 +50,18 @@ def get_matches_by_date() -> dict:
     """Fetches the nested metadata structure: {date: {match_id: {...}}}."""
     return db.reference("metadata").get() or {}
 
-def get_ist_date_key(dt: datetime = None) -> str:
-    """Generates a YYYY-MM-DD key for a given datetime in IST."""
+def get_pt_date_key(dt: datetime = None) -> str:
+    """Generates a YYYY-MM-DD key for a given datetime in PT."""
     if dt is None:
-        dt = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+        dt = datetime.now(timezone(PT_OFFSET))
     else:
-        dt = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
+        dt = dt.astimezone(timezone(PT_OFFSET))
     return dt.strftime("%Y-%m-%d")
 
 def save_structured_match(match_id: str, home: str, away: str, kickoff_iso: str, display_str: str) -> None:
     """Saves a match node with the date-indexed structure: metadata/{date}/{match_id}."""
     kickoff_dt = datetime.fromisoformat(kickoff_iso)
-    date_key = get_ist_date_key(kickoff_dt)
+    date_key = get_pt_date_key(kickoff_dt)
     
     db.reference(f"metadata/{date_key}/{match_id}").set({
         "id": match_id,
@@ -85,7 +85,7 @@ def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
     db.reference(f"pre_tournament/{clean_email_key(email)}").set({
         "teams": teams,
         "players": players,
-        "submitted_at": get_ist_timestamp()
+        "submitted_at": get_pt_timestamp()
     })
 
 def get_daily_predictions(email: str, date: str) -> dict:
@@ -97,7 +97,7 @@ def save_daily_predictions(email: str, date: str, match_winners_map: dict, daily
     db.reference(f"daily_predictions/{clean_email_key(email)}/{date}").set({
         "teams": match_winners_map,
         "players": daily_players,
-        "submitted_at": get_ist_timestamp()
+        "submitted_at": get_pt_timestamp()
     })
 
 def delete_all_matches() -> None:
@@ -107,7 +107,7 @@ def delete_all_matches() -> None:
 def save_match_result(match_id: str, result_data: dict) -> None:
     """Saves finalized results directly into the match metadata node and triggers entity scoring."""
     from src.scoring_service import update_match_points_node
-    result_data["updated_at"] = get_ist_timestamp()
+    result_data["updated_at"] = get_pt_timestamp()
 
     # Need to find the match metadata to get the date
     all_dates = db.reference("metadata").get() or {}
@@ -172,7 +172,7 @@ def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
         db.reference(f"points_audit/{email}/match_results/{match_id}").set({
             **new_breakdown,
             "total_points": new_total_match,
-            "updated_at": get_ist_timestamp()
+            "updated_at": get_pt_timestamp()
         })
         
         # Update leaderboard node
@@ -218,5 +218,5 @@ def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_pl
     ref.set({
         "teams": teams_map,
         "players": daily_players,
-        "submitted_at": f"{get_ist_timestamp()} (Admin WhatsApp Override)"
+        "submitted_at": f"{get_pt_timestamp()} (Admin WhatsApp Override)"
     })

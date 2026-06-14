@@ -2,7 +2,7 @@
 
 Welcome to prediction dashboard APSJ Boys!
 
-Read the guidelines below carefully to maximize your points. Remember, all daily submissions lock **15 minutes before the first match of the day kicks off (IST).**
+Read the guidelines below carefully to maximize your points. Remember, all daily submissions lock **15 minutes before the first match of the day kicks off (ET).**
 
 ## 🚀 Part 1: Pre-Tournament Lock-Ins (League Stage)
 

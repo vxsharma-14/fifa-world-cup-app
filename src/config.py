@@ -7,7 +7,7 @@ from firebase_admin import credentials
 import streamlit as st
 
 CONFIG = SimpleNamespace(
-    DATABASE_URL="https://fifa-world-cup-apsj-default-rtdb.firebaseio.com/",  # Replace with actual URL
+    DATABASE_URL="https://fifa-world-cup-apsj.firebaseio.com/",  # Replace with actual URL
     ADMIN_EMAIL="admin@fifafantasy.com"
 )
 

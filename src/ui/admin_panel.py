@@ -5,7 +5,7 @@ from datetime import datetime, time
 import zoneinfo
 from src.db_service import (
     get_scheduled_matches, save_structured_match,
-    delete_all_matches, save_match_result, get_match_results
+    delete_all_matches, save_match_result, get_match_results, get_pt_timestamp
 )
 from src.ui.leaderboard import render_leaderboard_table
 
@@ -14,7 +14,7 @@ def render_admin_dashboard() -> None:
     st.header("👑 Admin Command Center")
 
     # Fetch active data states
-    current_time = datetime.now(zoneinfo.ZoneInfo("Asia/Kolkata"))
+    current_time = datetime.now(zoneinfo.ZoneInfo("US/Pacific"))
     current_matches = get_scheduled_matches()
     
     # Re-map results from the metadata for UI backward compatibility
@@ -62,17 +62,17 @@ def render_admin_dashboard() -> None:
             with col_d:
                 match_date = st.date_input("Match Date", datetime.now().date())
             with col_t:
-                match_time = st.time_input("Kickoff Time (IST)", time(12, 00))
+                match_time = st.time_input("Kickoff Time (PT)", time(12, 00))
 
             if st.form_submit_button("➕ Add Match to Master Calendar"):
                 if not home_team or not away_team:
                     st.error("Please provide both team names.")
                 else:
                     combined_dt = datetime.combine(match_date, match_time)
-                    ist_dt = combined_dt.replace(tzinfo=zoneinfo.ZoneInfo("Asia/Kolkata"))
-                    kickoff_iso = ist_dt.isoformat()
+                    pt_dt = combined_dt.replace(tzinfo=zoneinfo.ZoneInfo("US/Pacific"))
+                    kickoff_iso = pt_dt.isoformat()
 
-                    timestamp_str = ist_dt.strftime("%I:%M %p")
+                    timestamp_str = pt_dt.strftime("%I:%M %p")
                     display_str = f"{timestamp_str} | {home_team} vs {away_team}"
                     match_id = f"match_{int(datetime.now().timestamp())}"
 
@@ -236,7 +236,7 @@ def render_admin_dashboard() -> None:
         st.subheader("💬 User Prediction Overrides (WhatsApp Backdoor)")
         st.caption("Manually adjust or insert entries for friends who submitted via WhatsApp due to platform delays.")
 
-        from src.db_service import get_all_users, save_user_daily_override, get_daily_predictions
+        from src.db_service import get_all_users, save_user_daily_override, get_daily_predictions, get_pt_timestamp
         import firebase_admin.db as fdb
 
         all_users = get_all_users()
@@ -301,7 +301,7 @@ def render_admin_dashboard() -> None:
                             user_existing_teams[selected_match_override_id] = chosen_winner
                             fdb.reference(f"daily_predictions/{selected_user_email.replace('.', '_')}/{override_date}").update({
                                 "teams": user_existing_teams,
-                                "submitted_at": f"{datetime.now().strftime('%Y-%m-%d %I:%M %p')} (Admin Match Override)"
+                                "submitted_at": f"{get_pt_timestamp()} (Admin Match Override)"
                             })
                             st.success(f"Match selection updated safely for {override_date}!")
                             st.rerun()
@@ -320,7 +320,7 @@ def render_admin_dashboard() -> None:
                         else:
                             fdb.reference(f"daily_predictions/{selected_user_email.replace('.', '_')}/{override_date}").update({
                                 "players": cleaned_players,
-                                "submitted_at": f"{datetime.now().strftime('%Y-%m-%d %I:%M %p')} (Admin Player Override)"
+                                "submitted_at": f"{get_pt_timestamp()} (Admin Player Override)"
                             })
                             st.success(f"Daily player choices successfully locked for {override_date}!")
                             st.rerun()
