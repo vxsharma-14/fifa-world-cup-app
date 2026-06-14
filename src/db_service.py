@@ -29,7 +29,7 @@ def create_user(email: str, name: str, password_raw: str) -> None:
     """Registers a new user inside the database nodes."""
     db.reference(f"users/{clean_email_key(email)}").set({
         "email": email,
-        "name": name,
+        "name": name.strip().title(),
         "password_hash": hash_password(password_raw)
     })
 
@@ -82,9 +82,19 @@ def get_pre_tournament_picks(email: str) -> dict:
 
 def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
     """Saves locked pre-tournament choices to database tracking."""
+    # Normalize players list
+    normalized_players = []
+    for p in players:
+        if isinstance(p, dict):
+            p['name'] = p.get('name', '').strip().title()
+            p['team'] = p.get('team', '').strip().title()
+            normalized_players.append(p)
+        else:
+            normalized_players.append(str(p).strip().title())
+
     db.reference(f"pre_tournament/{clean_email_key(email)}").set({
-        "teams": teams,
-        "players": players,
+        "teams": [t.strip().title() for t in teams],
+        "players": normalized_players,
         "submitted_at": get_pt_timestamp()
     })
 
@@ -94,9 +104,20 @@ def get_daily_predictions(email: str, date: str) -> dict:
 
 def save_daily_predictions(email: str, date: str, match_winners_map: dict, daily_players: list) -> None:
     """Locks user selections for a specific date's match winners and target dynamic players."""
+    
+    # Normalize players
+    normalized_players = []
+    for p in daily_players:
+        if isinstance(p, dict):
+            p['name'] = p.get('name', '').strip().title()
+            p['team'] = p.get('team', '').strip().title()
+            normalized_players.append(p)
+        else:
+            normalized_players.append(str(p).strip().title())
+
     db.reference(f"daily_predictions/{clean_email_key(email)}/{date}").set({
-        "teams": match_winners_map,
-        "players": daily_players,
+        "teams": {k: v.strip().title() for k, v in match_winners_map.items()},
+        "players": normalized_players,
         "submitted_at": get_pt_timestamp()
     })
 
@@ -220,3 +241,12 @@ def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_pl
         "players": daily_players,
         "submitted_at": f"{get_pt_timestamp()} (Admin WhatsApp Override)"
     })
+
+def get_all_roster_players() -> list:
+    """Fetches all player names across all teams from the rosters node."""
+    rosters = db.reference("rosters").get() or {}
+    all_players = []
+    for team, players in rosters.items():
+        if isinstance(players, list):
+            all_players.extend(players)
+    return sorted(list(set(all_players))) # Unique and sorted

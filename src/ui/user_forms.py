@@ -5,13 +5,14 @@ import zoneinfo
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, save_pre_tournament_picks,
-    get_daily_predictions, save_daily_predictions, get_pt_date_key
+    get_daily_predictions, save_daily_predictions, get_pt_date_key, get_all_roster_players
 )
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     """Processes upcoming match predictions, filtering out graded matches and locking by PT."""
     PT = zoneinfo.ZoneInfo("US/Pacific")
     now_pt = datetime.now(PT)
+    all_roster_players = get_all_roster_players()
     
     st.subheader("📅 Predictions Dashboard")
 
@@ -153,7 +154,14 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
                     p_team = c2.text_input(f"Player {i+1} Team", value=pre_t_player.get('team', ''), disabled=True)
                     daily_player_inputs.append(pre_t_player)
                 else:
-                    p_name = c1.text_input(f"Player {i+1} Name", value=existing_players[i].get('name', ''), key=f"daily_p_name_{i}")
+                    # Autocomplete search for player name
+                    options = [""] + all_roster_players
+                    current_name = existing_players[i].get('name', '')
+                    
+                    # Handle index for selectbox
+                    idx = options.index(current_name) if current_name in options else 0
+                    
+                    p_name = c1.selectbox(f"Player {i+1} Name", options=options, index=idx, key=f"daily_p_name_{i}")
                     p_team = c2.text_input(f"Player {i+1} Team", value=existing_players[i].get('team', ''), key=f"daily_p_team_{i}")
                     daily_player_inputs.append({'name': p_name, 'team': p_team})
 

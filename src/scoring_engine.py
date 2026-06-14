@@ -20,6 +20,12 @@ def calculate_match_points(
     Returns:
         Dict[str, int]: Breakdown of points by rule category.
     """
+    def normalize(name: Any) -> str:
+        """Normalizes player names on-the-fly for robust comparison."""
+        if isinstance(name, dict):
+            name = name.get('name', '')
+        return str(name).strip().lower()
+
     breakdown = {
         "match_winner": 0,
         "goal_difference": 0,
@@ -54,36 +60,46 @@ def calculate_match_points(
             breakdown["match_winner"] = 10
 
     # --- RULE: Player Performance Points ---
-    pre_t_players = pre_t_picks.get("players", [])
+    # Normalize lookup lists
+    pre_t_players = [normalize(p) for p in pre_t_picks.get("players", [])]
     user_daily_players = daily_picks.get("players", [])
     
-    all_scorers = match_result.get("home_scorers", []) + match_result.get("away_scorers", [])
-    motm = match_result.get("player_of_the_match")
+    all_scorers = [normalize(p) for p in (match_result.get("home_scorers", []) + match_result.get("away_scorers", []))]
+    motm = normalize(match_result.get("player_of_the_match"))
     
-    for player in user_daily_players:
-        if not player: continue
+    for player_entry in user_daily_players:
+        if not player_entry: continue
         
-        is_pre_t = player in pre_t_players
+        # Normalize the player being evaluated
+        norm_player = normalize(player_entry)
+        
+        # DEBUG: Log normalization
+        print(f"DEBUG: Comparing user player: '{norm_player}' against scorers: {[s for s in all_scorers]} and MOTM: '{motm}'")
+        
+        is_pre_t = norm_player in pre_t_players
         multiplier = 2 if is_pre_t else 1
         
-        if player in all_scorers:
+        if norm_player in all_scorers:
+            print(f"DEBUG: Match found in scorers for {norm_player}")
             breakdown["player_performance"] += 10 * multiplier
-        if player == motm:
+        if norm_player == motm:
+            print(f"DEBUG: Match found in MOTM for {norm_player}")
             breakdown["player_performance"] += 20 * multiplier
             
     # --- RULE: Disciplinary Penalties ---
-    yellow_cards = match_result.get("yellow_cards", [])
-    red_cards = match_result.get("red_cards", [])
+    yellow_cards = [normalize(p) for p in match_result.get("yellow_cards", [])]
+    red_cards = [normalize(p) for p in match_result.get("red_cards", [])]
     
-    for player in user_daily_players:
-        if not player: continue
+    for player_entry in user_daily_players:
+        if not player_entry: continue
+        norm_player = normalize(player_entry)
         
-        is_pre_t = player in pre_t_players
+        is_pre_t = norm_player in pre_t_players
         multiplier = 2 if is_pre_t else 1
         
-        if player in yellow_cards:
+        if norm_player in yellow_cards:
             breakdown["discipline"] -= 5 * multiplier
-        if player in red_cards:
+        if norm_player in red_cards:
             breakdown["discipline"] -= 10 * multiplier
             
     # --- RULE: Goal Difference Bonus/Penalty ---
@@ -99,5 +115,9 @@ def calculate_match_points(
             gd_points *= 2
             
         breakdown["goal_difference"] = gd_points
+            
+    # Add multiplier flags
+    breakdown["team_multiplier"] = (predicted_winner in pre_t_teams)
+    breakdown["player_multiplier"] = any(normalize(p) in pre_t_players for p in user_daily_players)
             
     return breakdown

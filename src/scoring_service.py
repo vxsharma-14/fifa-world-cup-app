@@ -5,9 +5,14 @@ from src.db_service import get_all_users, get_scheduled_matches, get_pre_tournam
 from typing import Dict, Any
 
 def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: str, home_team: str, away_team: str) -> None:
-    """Calculates and stores points for players/teams for a specific match."""
+    """Calculates and stores points for players/teams for a specific match with normalized names."""
+    
+    def normalize_name(name: str) -> str:
+        """Standardizes name formatting for DB storage."""
+        return name.strip().title()
+
     points = {
-        "ist_date": date,
+        "et_date": date,
         "scoring_stage": "league",
         "team_points": {},
         "player_points": {}
@@ -18,7 +23,6 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     a_score = match_result.get("away_score", 0)
     diff = h_score - a_score
     
-    # Points logic: GD bonus (10 * diff) + 10 base pts for winner
     if diff > 0: # Home win
         points["team_points"][home_team] = {"win": 10, "goaldiff": (diff * 10), "total": (diff * 10) + 10}
         points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * 10) * -1, "total": (diff * 10) * -1}
@@ -28,12 +32,20 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     else: # Draw
         points["team_points"][home_team] = {"win": 0, "goaldiff": 0, "total": 0}
         points["team_points"][away_team] = {"win": 0, "goaldiff": 0, "total": 0}
+        points["team_points"]["Draw"] = {"win": 0, "goaldiff": 0, "total": 10}
     
-    # Calculate Player points
-    all_scorers = match_result.get("home_scorers", []) + match_result.get("away_scorers", [])
-    motm = match_result.get("player_of_the_match")
-    all_involved = set(all_scorers + ([motm] if motm else []))
+    # Calculate Player points (proactively normalized)
+    home_scorers = [normalize_name(p) for p in match_result.get("home_scorers", [])]
+    away_scorers = [normalize_name(p) for p in match_result.get("away_scorers", [])]
+    all_scorers = home_scorers + away_scorers
     
+    motm = normalize_name(match_result.get("player_of_the_match", ""))
+    
+    # Identify all unique players involved
+    all_involved = set(all_scorers)
+    if motm:
+        all_involved.add(motm)
+        
     for player in all_involved:
         goals = all_scorers.count(player)
         motm_bonus = 20 if player == motm else 0
@@ -56,7 +68,7 @@ def refresh_leaderboard() -> None:
 
     # 2. Iterate through each match in match_points
     for match_id, m_points in all_match_points.items():
-        date = m_points.get("ist_date")
+        date = m_points.get("et_date")
         
         # 3. For each user, calculate points for this match
         for email, user_info in users.items():
@@ -76,13 +88,15 @@ def refresh_leaderboard() -> None:
             player_pts = sum(get_total(m_points.get('player_points', {}).get(p, 0)) for p in player_picks)
             
             # Check for multiplier
-            is_multiplier_applied = (team_pick in pre_t_teams) or any(p in pre_t_players for p in player_picks)
-            
+            team_multiplier = (team_pick in pre_t_teams)
+            player_multiplier = any(p in pre_t_players for p in player_picks)
+
             # 4. Save granular audit for this match
             user_points_root.child(f"{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").set({
                 "team_points": team_pts,
                 "player_points": player_pts,
-                "multiplier_applied": is_multiplier_applied
+                "team_multiplier": team_multiplier,
+                "player_multiplier": player_multiplier,
             })
     
     # 5. Aggregate totals
