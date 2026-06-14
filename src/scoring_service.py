@@ -82,14 +82,19 @@ def refresh_leaderboard() -> None:
             
             # Calculate user points
             team_pick = daily.get('teams', {}).get(match_id)
-            player_picks = daily.get('players', [])
+            raw_player_picks = daily.get('players', [])
+
+            def get_name(p):
+                return p.get('name', p) if isinstance(p, dict) else p
+
+            player_picks = [get_name(p) for p in raw_player_picks]
             
             team_pts = get_total(m_points.get('team_points', {}).get(team_pick, 0))
             player_pts = sum(get_total(m_points.get('player_points', {}).get(p, 0)) for p in player_picks)
             
             # Check for multiplier
             team_multiplier = (team_pick in pre_t_teams)
-            player_multiplier = any(p in pre_t_players for p in player_picks)
+            player_multiplier = any(get_name(p) in pre_t_players for p in player_picks)
 
             # 4. Save granular audit for this match
             user_points_root.child(f"{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").set({
