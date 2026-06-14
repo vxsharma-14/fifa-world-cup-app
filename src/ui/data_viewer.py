@@ -17,22 +17,24 @@ def get_authorized_predictions(target_email: str, target_date: str, viewer_email
     """
     Retrieves authorized predictions for a specific date.
     Admin sees all.
-    Users see their own, or others' ONLY after the cutoff for that date has passed.
+    Users see their own, or others' ONLY after the cutoff for the first match of that date has passed.
     """
     if is_admin or target_email == viewer_email:
         return get_daily_predictions(target_email, target_date)
     
-    # Check if cutoff passed for ANY match on this date
+    # Check if cutoff passed for the first match on this date
     all_matches = get_scheduled_matches()
     date_matches = [m for m in all_matches.values() 
                     if datetime.fromisoformat(m.get("kickoff_time", "")).astimezone(PT).strftime("%Y-%m-%d") == target_date]
     
     if not date_matches: return {}
     
-    # If ANY match is still open, we hide ALL predictions for this user for this date
-    for match in date_matches:
-        if not is_cutoff_passed(match.get("kickoff_time", "")):
-            return {} # Still locked
+    # Find the earliest match of the day
+    earliest_match = min(date_matches, key=lambda x: x.get("kickoff_time", ""))
+    
+    # Check only the earliest match cutoff
+    if not is_cutoff_passed(earliest_match.get("kickoff_time", "")):
+        return {} # Still locked
             
     return get_daily_predictions(target_email, target_date)
 
