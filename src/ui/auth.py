@@ -5,23 +5,37 @@ from streamlit_cookies_controller import CookieController
 from src.config import CONFIG
 from src.db_service import get_user_data, create_user, hash_password
 
-# Initialize the cookie controller once
-controller = CookieController()
 
 def render_auth_panel() -> str:
     """Assembles access cards, login inputs, and sign-out triggers in the left tray."""
     st.sidebar.title("🔐 Access Portal")
-
+    
+    # Instantiate controller locally to ensure no stale state
+    controller = CookieController()
+    
     # Check cookie for persistent session
     user_cookie = controller.get("authenticated_user")
     
+    # 1. Handle Logout/Session Mismatch
+    if "authenticated_user" in st.session_state and user_cookie != st.session_state["authenticated_user"]:
+        # Session state is out of sync with cookie, force logout to be safe
+        del st.session_state["authenticated_user"]
+        if "user_name" in st.session_state:
+            del st.session_state["user_name"]
+        st.rerun()
+
+    # 2. Sync if Cookie exists but Session empty
     if user_cookie and "authenticated_user" not in st.session_state:
-        # If cookie exists but session is empty, re-sync session
         user_data = get_user_data(user_cookie)
         if user_data:
             st.session_state["authenticated_user"] = user_cookie
             st.session_state["user_name"] = user_data["name"]
+        else:
+            # Cookie exists for unknown user, clear it
+            controller.remove("authenticated_user")
+            st.rerun()
 
+    # 3. Render State
     if "authenticated_user" in st.session_state:
         st.sidebar.success(f"Hello, {st.session_state['user_name']}")
         if st.sidebar.button("Log Out", use_container_width=True, key="logout_btn"):
@@ -31,6 +45,7 @@ def render_auth_panel() -> str:
             st.rerun()
         return st.session_state["authenticated_user"]
 
+    # 4. Auth Forms
     auth_mode = st.sidebar.radio("Choose Action:", ["Login", "Sign Up"])
 
     if auth_mode == "Sign Up":
