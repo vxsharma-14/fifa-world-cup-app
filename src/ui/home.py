@@ -270,5 +270,5 @@ def render_home_summary_dashboard(email: str) -> None:
                 st.warning("🚨 You haven't locked in predictions for some upcoming games!")
                 st.markdown(" ")
                 if st.button("📝 Click Here to Enter Predictions Now", use_container_width=True, type="primary"):
-                    st.session_state["current_page"] = "📝 Prediction Entry Forms"
+                    st.session_state["current_page"] = "📝 Daily Predictions"
                     st.rerun()
