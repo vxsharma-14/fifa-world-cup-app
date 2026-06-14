@@ -1,3 +1,4 @@
 streamlit
 firebase-admin
 streamlit-cookies-controller
+tzdata
