@@ -7,6 +7,7 @@ from src.ui.auth import render_auth_panel
 from src.ui.home import render_home_summary_dashboard
 from src.ui.user_forms import render_daily_predictions_section
 from src.ui.admin_panel import render_admin_dashboard
+from src.ui.data_viewer import render_filtered_participant_view
 from src.ui.points_analysis import render_granular_points_analysis
 from src.ui.tournament_setup import render_tournament_setup
 from src.ui.sidebar import render_sidebar_elements
@@ -64,7 +65,7 @@ def main() -> None:
         render_daily_predictions_section(active_email, raw_matches_nested)
 
     elif st.session_state["current_page"] == "🔍 Detailed Points Audit":
-        render_granular_points_analysis(active_email)
+        render_filtered_participant_view(active_email, is_admin=False)
 
 if __name__ == "__main__":
     main()

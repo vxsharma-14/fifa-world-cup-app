@@ -3,6 +3,7 @@
 import streamlit as st
 from datetime import datetime, time
 import zoneinfo
+from firebase_admin import db
 from src.db_service import (
     get_scheduled_matches, save_structured_match,
     delete_all_matches, save_match_result, get_match_results, get_pt_timestamp
@@ -38,17 +39,48 @@ def render_admin_dashboard() -> None:
             else:
                 upcoming_admin_list.append(match)
 
-    tab_sched, tab_grade, tab_part, tab_override, tab_leaderboard = st.tabs([
+    tab_sched, tab_grade, tab_part, tab_override, tab_leaderboard, tab_rosters = st.tabs([
         "📅 Matches & Scheduling", 
         "⚽ Results & Grading", 
         "👥 Participants", 
         "💬 Overrides",
-        "🏆 Leaderboard"
+        "🏆 Leaderboard",
+        "👥 Rosters"
     ])
 
+    # ... (Keep existing code for tabs 1-5, add Tab 6 below)
+
     # -------------------------------------------------------------
-    # TAB 1: MATCH SCHEDULER
+    # TAB 6: ROSTER MANAGEMENT
     # -------------------------------------------------------------
+    with tab_rosters:
+        st.subheader("👥 Manage Team Rosters")
+        
+        # 1. Fetch Rosters
+        rosters = db.reference("rosters").get() or {}
+        
+        # 2. Add/Edit Form
+        with st.form("roster_update_form"):
+            team = st.text_input("Team Name").strip()
+            players_str = st.text_area("Player Names (comma-separated)").strip()
+            
+            if st.form_submit_button("💾 Save/Update Roster"):
+                if not team or not players_str:
+                    st.error("Team name and players are required.")
+                else:
+                    player_list = [p.strip() for p in players_str.split(",")]
+                    db.reference(f"rosters/{team}").set(player_list)
+                    st.success(f"Roster for {team} updated!")
+                    st.rerun()
+        
+        st.markdown("---")
+        # 3. View Existing
+        for team, players in rosters.items():
+            with st.expander(f"{team} ({len(players)} players)"):
+                st.write(", ".join(players))
+                if st.button(f"🗑️ Delete Roster: {team}", key=f"del_{team}"):
+                    db.reference(f"rosters/{team}").delete()
+                    st.rerun()
     with tab_sched:
         st.subheader("📅 Master Calendar Match Scheduler")
         with st.form("match_scheduler_form", clear_on_submit=True):
@@ -162,15 +194,16 @@ def render_admin_dashboard() -> None:
                         motm = st.text_input("Man of the Match:", value=m_data.get("player_of_the_match", "")).strip()
 
                         if st.form_submit_button(btn_label, type="primary"):
+                            def norm(name): return name.strip().title()
                             h_scorers, a_scorers, yellow, red = [], [], [], []
                             for r in st.session_state[s_key]:
                                 if r['name']:
-                                    if r['team'] == home: h_scorers.extend([r['name']] * r['goals'])
-                                    else: a_scorers.extend([r['name']] * r['goals'])
+                                    if r['team'] == home: h_scorers.extend([norm(r['name'])] * r['goals'])
+                                    else: a_scorers.extend([norm(r['name'])] * r['goals'])
                             for r in st.session_state[c_key]:
                                 if r['name']:
-                                    if r['type'] == "Yellow": yellow.append(r['name'])
-                                    else: red.append(r['name'])
+                                    if r['type'] == "Yellow": yellow.append(norm(r['name']))
+                                    else: red.append(norm(r['name']))
 
                             save_match_result(m_id, {
                                 "match_id": m_id, 
@@ -181,7 +214,7 @@ def render_admin_dashboard() -> None:
                                 "away_scorers": a_scorers,
                                 "yellow_cards": yellow,
                                 "red_cards": red, 
-                                "player_of_the_match": motm
+                                "player_of_the_match": norm(motm) if motm else ""
                             })
                             # Clear session state for next edit
                             del st.session_state[s_key]
@@ -194,40 +227,9 @@ def render_admin_dashboard() -> None:
     # -------------------------------------------------------------
     with tab_part:
         st.subheader("👥 Participants Overview")
-        from src.db_service import get_all_users, get_pre_tournament_picks, get_daily_predictions
-        all_users = get_all_users()
-        if not all_users:
-            st.info("No participants found.")
-        else:
-            participant_data = []
-            def _extract_name(p):
-                if isinstance(p, dict):
-                    return str(p.get('name', ''))
-                return str(p)
-
-            for email, user_info in all_users.items():
-                # Ensure user_info is a dict
-                if not isinstance(user_info, dict): continue
-                
-                # Safely extract name
-                name = user_info.get("name", "")
-                if not isinstance(name, str): name = str(name)
-                
-                if "admin" in name.lower(): continue
-                
-                # Use today's date for participant overview
-                today_str = datetime.now().strftime("%Y-%m-%d")
-                pre_t, daily = get_pre_tournament_picks(email), get_daily_predictions(email, today_str)
-                
-                participant_data.append({
-                    "Name": name,
-                    "Pre-T Teams": ", ".join([str(t) for t in pre_t.get("teams", [])]),
-                    "Pre-T Players": ", ".join([_extract_name(p) for p in pre_t.get("players", [])]),
-                    "Daily Players": ", ".join([_extract_name(p) for p in daily.get("players", [])]),
-                    "Daily Match Picks": ", ".join([f"{v}" for v in daily.get("teams", {}).values()])
-                })
-            import pandas as pd
-            if participant_data: st.table(pd.DataFrame(participant_data))
+        from src.ui.data_viewer import render_filtered_participant_view
+        # Assuming admin is always viewing, is_admin=True
+        render_filtered_participant_view("admin@fifafantasy.com", True)
 
     # -------------------------------------------------------------
     # TAB 4: OVERRIDES
