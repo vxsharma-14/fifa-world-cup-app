@@ -184,6 +184,7 @@ def render_home_summary_dashboard(email: str) -> None:
                                 st.write(f"**Player Points: {p_pts}**")
                                 player_details = global_breakdown.get('player_points', {})
                                 for p_entry in match_daily_players:
+                                     if not p_entry: continue
                                      p_name = p_entry.get('name', p_entry) if isinstance(p_entry, dict) else p_entry
                                      if p_name in player_details:
                                          pd = player_details[p_name]

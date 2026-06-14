@@ -65,16 +65,23 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
 
     existing = get_daily_predictions(email, target_date)
     existing_teams_map = existing.get("teams", {})
-    existing_players = existing.get("players", [{'name': '', 'team': ''} for _ in range(2)])
+    # Retrieve and sanitize existing player picks
+    raw_players = existing.get("players", [])
+    if not isinstance(raw_players, list): raw_players = []
     
-    # Process existing_players to ensure they are dictionaries
-    processed_players = []
-    for p in existing_players:
+    # Process and pad to ensure exactly 2 dictionary entries
+    existing_players = []
+    for i in range(2):
+        p = raw_players[i] if i < len(raw_players) else {}
         if isinstance(p, dict):
-            processed_players.append(p)
+            existing_players.append(p)
         else:
-            processed_players.append({'name': str(p) if p else '', 'team': ''})
-    existing_players = processed_players
+            existing_players.append({'name': str(p) if p else '', 'team': ''})
+    
+    # Ensure keys exist for safety
+    for p in existing_players:
+        if 'name' not in p: p['name'] = ''
+        if 'team' not in p: p['team'] = ''
 
     # Fetch Pre-T picks
     pre_t_picks = get_pre_tournament_picks(email)
