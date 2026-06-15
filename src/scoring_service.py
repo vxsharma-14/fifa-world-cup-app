@@ -12,7 +12,7 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
         return name.strip().title()
 
     points = {
-        "et_date": date,
+        "et_date": date,   # this is pt_date but don't change it as it will mess up the code
         "scoring_stage": "league",
         "team_points": {},
         "player_points": {}
@@ -24,11 +24,11 @@ def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: 
     diff = h_score - a_score
     
     if diff > 0: # Home win
-        points["team_points"][home_team] = {"win": 10, "goaldiff": (diff * 10), "total": (diff * 10) + 10}
-        points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * 10) * -1, "total": (diff * 10) * -1}
+        points["team_points"][home_team] = {"win": 10, "goaldiff": (diff * 5), "total": (diff * 5) + 10}
+        points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * 5) * -1, "total": (diff * 5) * -1}
     elif diff < 0: # Away win
-        points["team_points"][home_team] = {"win": 0, "goaldiff": (diff * 10), "total": (diff * 10)}
-        points["team_points"][away_team] = {"win": 10, "goaldiff": (abs(diff) * 10), "total": (abs(diff) * 10) + 10}
+        points["team_points"][home_team] = {"win": 0, "goaldiff": (diff * 5), "total": (diff * 5)}
+        points["team_points"][away_team] = {"win": 10, "goaldiff": (abs(diff) * 5), "total": (abs(diff) * 5) + 10}
     else: # Draw
         points["team_points"][home_team] = {"win": 0, "goaldiff": 0, "total": 0}
         points["team_points"][away_team] = {"win": 0, "goaldiff": 0, "total": 0}
@@ -77,28 +77,56 @@ def refresh_leaderboard() -> None:
             # Fetch predictions and pre-t picks
             daily = get_daily_predictions(email, date)
             pre_t = get_pre_tournament_picks(email)
+            
+            # Correctly extract Pre-T data
             pre_t_teams = pre_t.get("teams", [])
-            pre_t_players = pre_t.get("players", [])
+            raw_pre_t_players = pre_t.get("players", [])
+            # Normalize Pre-T players (list of dicts to list of normalized names)
+            pre_t_players = []
+            for p in raw_pre_t_players:
+                if isinstance(p, dict):
+                    pre_t_players.append(str(p.get('name', '')).strip().lower())
+                else:
+                    pre_t_players.append(str(p).strip().lower())
             
             # Calculate user points
             team_pick = daily.get('teams', {}).get(match_id)
             raw_player_picks = daily.get('players', [])
 
-            def get_name(p):
-                return p.get('name', p) if isinstance(p, dict) else p
-
-            player_picks = [get_name(p) for p in raw_player_picks]
+            # Normalize daily player picks
+            player_picks = []
+            for p in raw_player_picks:
+                name = p.get('name', p) if isinstance(p, dict) else p
+                player_picks.append(str(name).strip().lower())
             
+            # Fetch base points
             team_pts = get_total(m_points.get('team_points', {}).get(team_pick, 0))
-            player_pts = sum(get_total(m_points.get('player_points', {}).get(p, 0)) for p in player_picks)
             
             # Check for multiplier
             team_multiplier = (team_pick in pre_t_teams)
-            player_multiplier = any(get_name(p) in pre_t_players for p in player_picks)
+            
+            # Apply team multiplier
+            final_team_pts = team_pts * 2 if team_multiplier else team_pts
+            
+            # Calculate player points with individual multiplier application
+            player_pts = 0
+            # Helper to lookup player points by normalized name
+            player_points_db = m_points.get('player_points', {})
+            db_player_map = {str(k).strip().lower(): v for k, v in player_points_db.items()}
+
+            for p_norm in player_picks:
+                p_pts = get_total(db_player_map.get(p_norm, 0))
+                
+                # Apply player multiplier
+                if p_norm in pre_t_players:
+                    p_pts *= 2
+                player_pts += p_pts
+            
+            player_multiplier = any(p_norm in pre_t_players for p_norm in player_picks)
 
             # 4. Save granular audit for this match
             user_points_root.child(f"{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").set({
-                "team_points": team_pts,
+                "team_points": final_team_pts,
                 "player_points": player_pts,
                 "team_multiplier": team_multiplier,
                 "player_multiplier": player_multiplier,
