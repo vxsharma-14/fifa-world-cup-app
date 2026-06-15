@@ -88,21 +88,29 @@ def render_home_summary_dashboard(email: str) -> None:
         current_time = datetime.now(zoneinfo.ZoneInfo("US/Pacific"))
         raw_matches = get_scheduled_matches()
 
+        all_matches_by_date = {}
         upcoming_list = []
         completed_list = []
 
-        # Categorize matches dynamically based on timestamp comparison
+        # Categorize matches dynamically based on cutoff comparison
         if isinstance(raw_matches, dict):
             for match in raw_matches.values():
                 kickoff_iso = match.get("kickoff_time", "")
                 if kickoff_iso:
-                    kickoff_dt = datetime.fromisoformat(kickoff_iso)
-                    if current_time >= kickoff_dt:
+                    # Use cutoff time to decide if it's still 'upcoming' or already 'completed'
+                    cutoff_dt = get_match_cutoff_dt(kickoff_iso)
+                    if current_time >= cutoff_dt:
                         completed_list.append(match)
                     else:
                         upcoming_list.append(match)
                 else:
                     upcoming_list.append(match)
+
+                kickoff_dt = datetime.fromisoformat(kickoff_iso)
+                date_key = get_pt_date_key(kickoff_dt)
+                if date_key not in all_matches_by_date:
+                    all_matches_by_date[date_key] = []
+                all_matches_by_date[date_key].append(match)
 
         # 1. Render Completed Matches Section
         if completed_list:
@@ -133,7 +141,7 @@ def render_home_summary_dashboard(email: str) -> None:
             
             # Render cards for selected date
             day_matches = sorted(matches_by_date[selected_date], key=lambda x: x.get("kickoff_time", ""), reverse=True)
-            
+
             # Using columns to create a grid: 2 columns on wide screens, stacks automatically on small screens
             cols = st.columns(2)
             
@@ -224,20 +232,22 @@ def render_home_summary_dashboard(email: str) -> None:
             )
             
             # Calculate countdown based on earliest match of the selected day
-            day_matches = upcoming_by_date[selected_up_date]
-            earliest_match_for_day = min(day_matches, key=lambda x: x.get("kickoff_time", ""))
+
+            all_day_matches = all_matches_by_date[selected_up_date]
+            up_day_matches = upcoming_by_date[selected_up_date]
+            earliest_match_for_day = min(all_day_matches, key=lambda x: x.get("kickoff_time", ""))
             
             cutoff_dt = get_match_cutoff_dt(earliest_match_for_day.get("kickoff_time", ""))
             time_remaining = cutoff_dt - current_time
-            
+
             if time_remaining.total_seconds() > 0:
                 hours, remainder = divmod(int(time_remaining.total_seconds()), 3600)
                 minutes, _ = divmod(remainder, 60)
                 st.warning(f"Predictions for {selected_up_date} locks in **{hours}h {minutes}m**", icon="⏰")
             else:
-                st.error(f"⚠️ Predictions for {selected_up_date} are locked!", icon="🔒")
+                st.error(f"Predictions are no longer available for {selected_up_date}.", icon=":material/sentiment_sad:")
             
-            day_upcoming = sorted(day_matches, key=lambda x: x.get("kickoff_time", ""))
+            day_upcoming = sorted(up_day_matches, key=lambda x: x.get("kickoff_time", ""))
             
             # Fetch predictions for the SELECTED upcoming date dynamically
             match_preds = get_daily_predictions(email, selected_up_date)
