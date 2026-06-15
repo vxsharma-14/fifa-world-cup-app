@@ -1,11 +1,18 @@
 """Pure data-access layer handling all Firebase Realtime Database interactions."""
 
 import hashlib
+import zoneinfo
 from datetime import datetime, timedelta, timezone
 from firebase_admin import db
 
 # US Pacific Time (PDT) is UTC-7
 PT_OFFSET = timedelta(hours=-7)
+PT = zoneinfo.ZoneInfo("US/Pacific")
+
+def get_match_cutoff_dt(kickoff_iso: str) -> datetime:
+    """Calculates the 15-minute cutoff for a match in PT."""
+    kickoff_dt = datetime.fromisoformat(kickoff_iso).astimezone(PT)
+    return kickoff_dt - timedelta(minutes=15)
 
 def hash_password(password: str) -> str:
     """Hashes passwords using SHA-256."""

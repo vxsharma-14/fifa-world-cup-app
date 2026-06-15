@@ -2,7 +2,7 @@
 
 import streamlit as st
 from src.db_service import (get_pre_tournament_picks, get_daily_predictions, get_scheduled_matches, get_pt_date_key,
-                            get_user_match_breakdown, get_match_points_breakdown, clean_email_key)
+                            get_user_match_breakdown, get_match_points_breakdown, clean_email_key, get_match_cutoff_dt)
 from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime, timedelta
@@ -200,20 +200,6 @@ def render_home_summary_dashboard(email: str) -> None:
                         st.markdown(f"Prediction: {prediction}{status_icon}")
             st.markdown("---")
 
-        # 2. Render Upcoming Submissions Section
-        # Calculate time to next match cutoff (kickoff - 15 mins)
-        if upcoming_list:
-            next_match = min(upcoming_list, key=lambda x: x.get("kickoff_time", ""))
-            kickoff_dt = datetime.fromisoformat(next_match.get("kickoff_time", ""))
-            cutoff_dt = kickoff_dt - timedelta(minutes=15)
-            time_remaining = cutoff_dt - current_time
-            
-            if time_remaining.total_seconds() > 0:
-                hours, remainder = divmod(int(time_remaining.total_seconds()), 3600)
-                minutes, _ = divmod(remainder, 60)
-            else:
-                st.error("⚠️ Match prediction locked!", icon="🔒")
-
         st.markdown("##### ⏳ Upcoming Submissions")
         
         if not upcoming_list:
@@ -236,8 +222,31 @@ def render_home_summary_dashboard(email: str) -> None:
                 options=sorted_upcoming_dates,
                 key="upcoming_date_selector"
             )
-            st.warning(f"Predictions for {selected_up_date} locks in **{hours}h {minutes}m**", icon="⏰")
-            day_upcoming = sorted(upcoming_by_date[selected_up_date], key=lambda x: x.get("kickoff_time", ""))
+            
+            # Calculate countdown based on earliest match of the selected day
+            day_matches = upcoming_by_date[selected_up_date]
+            earliest_match_for_day = min(day_matches, key=lambda x: x.get("kickoff_time", ""))
+            
+            cutoff_dt = get_match_cutoff_dt(earliest_match_for_day.get("kickoff_time", ""))
+            
+            # --- DEBUGGING ---
+            st.write(f"DEBUG: Selected Date: {selected_up_date}")
+            st.write(f"DEBUG: Current Time (PT): {current_time}")
+            st.write(f"DEBUG: Earliest Match: {earliest_match_for_day.get('display_string')}")
+            st.write(f"DEBUG: Raw Kickoff: {earliest_match_for_day.get('kickoff_time')}")
+            st.write(f"DEBUG: Calculated Cutoff (PT): {cutoff_dt}")
+            # -----------------
+            
+            time_remaining = cutoff_dt - current_time
+            
+            if time_remaining.total_seconds() > 0:
+                hours, remainder = divmod(int(time_remaining.total_seconds()), 3600)
+                minutes, _ = divmod(remainder, 60)
+                st.warning(f"Predictions for {selected_up_date} locks in **{hours}h {minutes}m**", icon="⏰")
+            else:
+                st.error(f"⚠️ Predictions for {selected_up_date} are locked!", icon="🔒")
+            
+            day_upcoming = sorted(day_matches, key=lambda x: x.get("kickoff_time", ""))
             
             # Fetch predictions for the SELECTED upcoming date dynamically
             match_preds = get_daily_predictions(email, selected_up_date)

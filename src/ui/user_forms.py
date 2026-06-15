@@ -5,7 +5,7 @@ import zoneinfo
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, save_pre_tournament_picks,
-    get_daily_predictions, save_daily_predictions, get_pt_date_key, get_all_roster_players
+    get_daily_predictions, save_daily_predictions, get_pt_date_key, get_all_roster_players, get_match_cutoff_dt
 )
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
@@ -41,16 +41,16 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     
     # 1. Determine Target Matchday
     target_date = None
+    matchday_cutoff_dt = None
     for date in sorted_dates:
         matches_on_date = raw_matches[date]
         if not isinstance(matches_on_date, dict): continue
         
-        # Find earliest match to determine cutoff
+        # Find earliest match to determine cutoff for the whole day
         earliest_match = min(matches_on_date.values(), key=lambda x: x['kickoff_time'])
-        kickoff_dt = datetime.fromisoformat(earliest_match['kickoff_time']).astimezone(PT)
-        cutoff_dt = kickoff_dt - timedelta(minutes=15)
+        matchday_cutoff_dt = get_match_cutoff_dt(earliest_match['kickoff_time'])
         
-        if now_pt < cutoff_dt:
+        if now_pt < matchday_cutoff_dt:
             target_date = date
             break
             
@@ -125,8 +125,8 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
                 # Logic: If Pre-T team is playing, auto-lock
                 is_pre_t_match = home in pre_t_teams or away in pre_t_teams
                 
-                # Automated Cutoff (15 mins prior to kickoff in PT)
-                is_locked = now_pt >= (kickoff_dt - timedelta(minutes=15))
+                # Matchday-level locking
+                is_locked = now_pt >= matchday_cutoff_dt
                 
                 # Determine winner
                 if is_pre_t_match:
