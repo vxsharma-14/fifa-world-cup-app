@@ -228,15 +228,6 @@ def render_home_summary_dashboard(email: str) -> None:
             earliest_match_for_day = min(day_matches, key=lambda x: x.get("kickoff_time", ""))
             
             cutoff_dt = get_match_cutoff_dt(earliest_match_for_day.get("kickoff_time", ""))
-            
-            # --- DEBUGGING ---
-            st.write(f"DEBUG: Selected Date: {selected_up_date}")
-            st.write(f"DEBUG: Current Time (PT): {current_time}")
-            st.write(f"DEBUG: Earliest Match: {earliest_match_for_day.get('display_string')}")
-            st.write(f"DEBUG: Raw Kickoff: {earliest_match_for_day.get('kickoff_time')}")
-            st.write(f"DEBUG: Calculated Cutoff (PT): {cutoff_dt}")
-            # -----------------
-            
             time_remaining = cutoff_dt - current_time
             
             if time_remaining.total_seconds() > 0:
