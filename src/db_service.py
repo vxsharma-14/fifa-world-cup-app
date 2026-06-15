@@ -160,7 +160,6 @@ def save_match_result(match_id: str, result_data: dict) -> None:
     # Trigger entity-level point update
     update_match_points_node(match_id, result_data, target_date, target_match.get("home_team"), target_match.get("away_team"))
 
-
 def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
     """Incrementally updates participant points and leaderboard, excluding admins."""
     from src.scoring_engine import calculate_match_points
@@ -217,7 +216,6 @@ def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""
     return db.reference("results").get() or {}
 
-
 def get_user_match_breakdown(email: str, date: str, match_id: str) -> dict:
     """Retrieves a user's points breakdown for a specific match."""
     return db.reference(f"user_points/{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").get() or {}
@@ -229,7 +227,6 @@ def get_match_points_breakdown(match_id: str) -> dict:
 def get_all_users() -> dict:
     """Fetches all registered users from the system."""
     return db.reference("users").get() or {}
-
 
 def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_players: list) -> None:
     """Admin tool to explicitly insert or override a specific match prediction for a user."""
