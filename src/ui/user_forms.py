@@ -137,9 +137,15 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
                 else:
                     options = [home, away, "Draw"]
                     current_pick = existing_teams_map.get(match_id, "Draw")
-                    if current_pick not in options: current_pick = "Draw"
                     
-                    default_idx = options.index(current_pick)
+                    # Robust comparison to handle case/spacing mismatches
+                    matched_pick = "Draw"
+                    for option in options:
+                        if str(current_pick).strip().lower() == str(option).strip().lower():
+                            matched_pick = option
+                            break
+                    
+                    default_idx = options.index(matched_pick)
                     selected_winners[match_id] = st.selectbox(
                         display_label,
                         options=options,

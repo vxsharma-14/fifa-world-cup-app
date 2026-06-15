@@ -123,7 +123,7 @@ def save_daily_predictions(email: str, date: str, match_winners_map: dict, daily
             normalized_players.append(str(p).strip().title())
 
     db.reference(f"daily_predictions/{clean_email_key(email)}/{date}").set({
-        "teams": {k: v.strip().title() for k, v in match_winners_map.items()},
+        "teams": {k: v.strip() for k, v in match_winners_map.items()},
         "players": normalized_players,
         "submitted_at": get_pt_timestamp()
     })
