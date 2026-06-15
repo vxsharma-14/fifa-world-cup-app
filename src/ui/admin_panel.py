@@ -171,11 +171,19 @@ def render_admin_dashboard() -> None:
                         if c_key not in st.session_state: 
                             st.session_state[c_key] = [{'team': home, 'name': n, 'type': 'Yellow'} for n in m_data.get('yellow_cards', [])] + [{'team': home, 'name': n, 'type': 'Red'} for n in m_data.get('red_cards', [])] or [{'team': home, 'name': '', 'type': 'Yellow'}]
 
+                        from src.db_service import get_all_roster_players
+                        all_roster_players = get_all_roster_players()
+
                         st.markdown("##### Goal Scorers")
                         for i, row in enumerate(st.session_state[s_key]):
                             c1, c2, c3 = st.columns([2, 2, 1])
                             row['team'] = c1.selectbox("Team", [home, away], index=[home, away].index(row['team']) if row['team'] in [home, away] else 0, key=f"st_{m_id}_{i}")
-                            row['name'] = c2.text_input("Player", value=row['name'], key=f"sn_{m_id}_{i}")
+                            
+                            # Replace text_input with searchable selectbox
+                            options = [""] + all_roster_players
+                            idx = options.index(row['name']) if row['name'] in options else 0
+                            row['name'] = c2.selectbox("Player", options=options, index=idx, key=f"sn_{m_id}_{i}")
+                            
                             row['goals'] = c3.number_input("Goals", min_value=1, value=row.get('goals', 1), key=f"sg_{m_id}_{i}")
                         if st.form_submit_button("➕ Add Scorer"): 
                             st.session_state[s_key].append({'team': home, 'name': '', 'goals': 1})
@@ -191,7 +199,11 @@ def render_admin_dashboard() -> None:
                             st.session_state[c_key].append({'team': home, 'name': '', 'type': 'Yellow'})
                             st.rerun()
 
-                        motm = st.text_input("Man of the Match:", value=m_data.get("player_of_the_match", "")).strip()
+                        # Man of the Match
+                        options = [""] + all_roster_players
+                        motm_current = m_data.get("player_of_the_match", "")
+                        motm_idx = options.index(motm_current) if motm_current in options else 0
+                        motm = st.selectbox("Man of the Match:", options=options, index=motm_idx, key=f"motm_{m_id}")
 
                         if st.form_submit_button(btn_label, type="primary"):
                             def norm(name): return name.strip().title()
@@ -311,14 +323,24 @@ def render_admin_dashboard() -> None:
             # COLUMN 2: ISOLATED GLOBAL DAILY PLAYER OVERRIDE FORM
             with col_player:
                 st.markdown("##### 🏃‍♂️ Part B: Override Daily Player Lock-Ins")
+                from src.db_service import get_all_roster_players
+                all_roster_players = get_all_roster_players()
+                
                 with st.form("whatsapp_player_override_form"):
-                    p1 = st.text_input("Daily Player Pick 1:", value=user_existing_players[0])
-                    p2 = st.text_input("Daily Player Pick 2:", value=user_existing_players[1])
+                    options = [""] + all_roster_players
+                    
+                    # Pick 1
+                    p1_idx = options.index(user_existing_players[0]) if user_existing_players[0] in options else 0
+                    p1 = st.selectbox("Daily Player Pick 1:", options=options, index=p1_idx)
+                    
+                    # Pick 2
+                    p2_idx = options.index(user_existing_players[1]) if user_existing_players[1] in options else 0
+                    p2 = st.selectbox("Daily Player Pick 2:", options=options, index=p2_idx)
 
                     if st.form_submit_button("🚀 Force Update Daily Players"):
                         cleaned_players = [p.strip() for p in [p1, p2] if p.strip()]
                         if len(cleaned_players) != 2:
-                            st.error("Validation Error: Both text boxes must contain a valid player name.")
+                            st.error("Validation Error: Both dropdowns must contain a valid player name.")
                         else:
                             fdb.reference(f"daily_predictions/{selected_user_email.replace('.', '_')}/{override_date}").update({
                                 "players": cleaned_players,
