@@ -1,11 +1,12 @@
 """UI module rendering granular points calculations and ledger audit analysis."""
 
 import streamlit as st
+from firebase_admin import db
 from src.db_service import (
     get_pre_tournament_picks, get_daily_predictions, 
     get_matches_by_date, get_match_results, get_pt_date_key
 )
-from src.scoring_engine import calculate_match_points
+from src.scoring_engine import calculate_user_match_breakdown
 
 def render_granular_points_analysis(email: str) -> None:
     """Renders an interactive audit log detailing calculated points based on DB data."""
@@ -28,19 +29,16 @@ def render_granular_points_analysis(email: str) -> None:
 
         for match_id, match_data in matches_on_date.items():
             if match_data.get("status") == "completed":
-                match_result = match_data.get("results", {})
-
-                points_dict = calculate_match_points(match_id, pre_t_picks, daily_picks, match_result, match_data)
+                # Fetch match points data for this match
+                m_points = db.reference(f"match_points/{match_id}").get() or {}
                 
-                # Separate team and player points for the audit view
-                # Based on our scoring engine dictionary keys:
-                # points_dict keys are e.g., 'match_winner', 'goal_difference', 'player_performance', 'discipline'
+                # Calculate breakdown using new engine
+                breakdown = calculate_user_match_breakdown(email, date, match_id, m_points, pre_t_picks, daily_picks)
                 
-                # For audit, let's group these into 'team' and 'player' logic
-                team_pts = points_dict.get('match_winner', 0) + points_dict.get('goal_difference', 0)
-                player_pts = points_dict.get('player_performance', 0) + points_dict.get('discipline', 0)
+                team_pts = breakdown.get('team_points', 0)
+                player_pts = breakdown.get('player_points', 0)
                 
-                total_pts = sum(points_dict.values())
+                total_pts = team_pts + player_pts
                 
                 total_points += total_pts
                 match_breakdowns.append({
