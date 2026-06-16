@@ -157,25 +157,33 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
         with col_p:
             st.markdown("#### 🏃‍♂️ Daily Player Picks")
             daily_player_inputs = []
-            for i in range(2):
-                # If an active Pre-T player is available, auto-fill and lock
-                pre_t_player = active_pre_t_players[i] if i < len(active_pre_t_players) else None
-                
+            
+            # 1. Render all active Pre-T players (disabled/auto-locked)
+            for idx, p in enumerate(active_pre_t_players):
                 c1, c2 = st.columns([2, 1])
-                if pre_t_player:
-                    p_name = c1.text_input(f"Player {i+1} Name", value=pre_t_player.get('name', ''), disabled=True)
-                    p_team = c2.text_input(f"Player {i+1} Team", value=pre_t_player.get('team', ''), disabled=True)
-                    daily_player_inputs.append(pre_t_player)
-                else:
-                    # Autocomplete search for player name
-                    options = [""] + all_roster_players
-                    current_name = existing_players[i].get('name', '')
+                c1.text_input(f"Player (Pre-T)", value=p.get('name', ''), disabled=True, key=f"pre_t_name_{p.get('name')}_{idx}")
+                c2.text_input(f"Team (Pre-T)", value=p.get('team', ''), disabled=True, key=f"pre_t_team_{p.get('name')}_{idx}")
+                daily_player_inputs.append(p)
+                
+            # 2. Render remaining slots up to a total of 2
+            remaining_slots = 2 - len(active_pre_t_players)
+            
+            if remaining_slots > 0:
+                for i in range(remaining_slots):
+                    # Index in our overall daily player list
+                    slot_idx = len(active_pre_t_players) + i
                     
-                    # Handle index for selectbox
+                    c1, c2 = st.columns([2, 1])
+                    options = [""] + all_roster_players
+                    
+                    # Determine current value if it exists in existing submissions
+                    current_pick = existing_players[i] if i < len(existing_players) else {'name': '', 'team': ''}
+                    current_name = current_pick.get('name', '')
+                    
                     idx = options.index(current_name) if current_name in options else 0
                     
-                    p_name = c1.selectbox(f"Player {i+1} Name", options=options, index=idx, key=f"daily_p_name_{i}")
-                    p_team = c2.text_input(f"Player {i+1} Team", value=existing_players[i].get('team', ''), key=f"daily_p_team_{i}")
+                    p_name = c1.selectbox(f"Player {slot_idx+1} Name", options=options, index=idx, key=f"daily_p_name_{slot_idx}")
+                    p_team = c2.text_input(f"Player {slot_idx+1} Team", value=current_pick.get('team', ''), key=f"daily_p_team_{slot_idx}")
                     daily_player_inputs.append({'name': p_name, 'team': p_team})
 
         if st.form_submit_button("Submit Predictions", type="primary"):
