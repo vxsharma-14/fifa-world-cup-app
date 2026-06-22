@@ -160,58 +160,6 @@ def save_match_result(match_id: str, result_data: dict) -> None:
     # Trigger entity-level point update
     update_match_points_node(match_id, result_data, target_date, target_match.get("home_team"), target_match.get("away_team"))
 
-def recalculate_and_save_user_points(match_id: str, result_data: dict) -> None:
-    """Incrementally updates participant points and leaderboard, excluding admins."""
-    from src.scoring_engine import calculate_match_points
-    all_users = get_all_users()
-    
-    # Locate match in date-indexed metadata
-    all_dates = db.reference("metadata").get() or {}
-    match_metadata = None
-    match_date = None
-    for date, matches in all_dates.items():
-        if isinstance(matches, dict) and match_id in matches:
-            match_metadata = matches[match_id]
-            match_date = date
-            break
-            
-    if not match_metadata:
-        raise ValueError(f"Match {match_id} not found in metadata.")
-    
-    for email, user_info in all_users.items():
-        # Filter out admins
-        if "admin" in user_info.get("name", "").lower():
-            continue
-            
-        # Get existing data
-        pre_t_picks = get_pre_tournament_picks(email)
-        daily_picks = get_daily_predictions(email, match_date)
-        
-        # Calculate new points
-        new_breakdown = calculate_match_points(match_id, pre_t_picks, daily_picks, result_data, match_metadata)
-        new_total_match = sum(new_breakdown.values())
-        
-        # Get old points from audit node to calculate delta
-        old_audit = db.reference(f"points_audit/{email}/match_results/{match_id}").get() or {}
-        old_total_match = old_audit.get("total_points", 0)
-        
-        # Update audit node
-        db.reference(f"points_audit/{email}/match_results/{match_id}").set({
-            **new_breakdown,
-            "total_points": new_total_match,
-            "updated_at": get_pt_timestamp()
-        })
-        
-        # Update leaderboard node
-        leaderboard_ref = db.reference(f"leaderboard/{email}")
-        user_leaderboard = leaderboard_ref.get() or {"total_score": 0, "name": user_info["name"]}
-        
-        # Delta = new_points - old_points
-        delta = new_total_match - old_total_match
-        user_leaderboard["total_score"] = user_leaderboard.get("total_score", 0) + delta
-        
-        leaderboard_ref.update(user_leaderboard)
-
 def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""
     return db.reference("results").get() or {}
