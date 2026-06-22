@@ -3,7 +3,7 @@
 import streamlit as st
 from datetime import datetime, timedelta
 import zoneinfo
-from src.db_service import get_all_users, get_daily_predictions, get_scheduled_matches, get_pre_tournament_picks, clean_email_key, get_user_match_breakdown, get_match_points_breakdown
+from src.db_service import get_all_users, get_daily_predictions, get_scheduled_matches, get_pre_tournament_picks, clean_email_key, get_user_match_breakdown, get_match_points_breakdown, get_matches_by_date
 
 PT = zoneinfo.ZoneInfo("US/Pacific")
 
@@ -57,10 +57,13 @@ def render_daily_prediction_card(email, date, match_id, match_data, prediction, 
         if performance_view in ["Both", "Team"]:
                 # Point Breakup from match_points node
                 team_metrics = match_points.get('team_points', {}).get(prediction, {})
-                win_pts = team_metrics.get('win', 0)
-                gd_pts = team_metrics.get('goaldiff', 0)
-                total_pts = team_metrics.get('total', 0)
-                mult = "Yes" if breakdown.get('multiplier_applied') else "No"
+                is_mult = breakdown.get('team_multiplier', False)
+                mult_factor = 2 if is_mult else 1
+                
+                win_pts = team_metrics.get('win', 0) * mult_factor
+                gd_pts = team_metrics.get('goaldiff', 0) * mult_factor
+                total_pts = breakdown.get('team_points', 0)
+                mult = "Yes" if is_mult else "No"
 
                 with st.container(border=True):
                     if is_completed:
@@ -79,6 +82,16 @@ def render_player_performance_view(email, date, preds):
 
     st.markdown("#### Player Performance")
 
+    # Fetch Pre-Tournament picks to identify if multiplier applies to each player
+    pre_t = get_pre_tournament_picks(email)
+    raw_pre_t_players = pre_t.get("players", [])
+    pre_t_players = []
+    for p in raw_pre_t_players:
+        if isinstance(p, dict):
+            pre_t_players.append(str(p.get('name', '')).strip().lower())
+        else:
+            pre_t_players.append(str(p).strip().lower())
+
     # We need to map matches on this date to their match_points
     all_matches = get_scheduled_matches()
     matches_on_date = [m for m in all_matches.values()
@@ -90,8 +103,11 @@ def render_player_performance_view(email, date, preds):
 
     player_names = [_get_name(p) for p in players]
 
-    # Structure: {player_name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False}}
-    aggregated_stats = {name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False} for name in player_names}
+    # Structure: {player_name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False, 'is_pre_t': False}}
+    aggregated_stats = {
+        name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False, 'is_pre_t': name.strip().lower() in pre_t_players} 
+        for name in player_names
+    }
 
     for match in matches_on_date:
         is_completed = match.get('status') == "completed"
@@ -100,9 +116,11 @@ def render_player_performance_view(email, date, preds):
 
         for name in player_names:
             stats = player_points_map.get(name, {})
-            aggregated_stats[name]['goals'] += stats.get('goals', 0)
-            aggregated_stats[name]['motm'] += stats.get('motm', 0)
-            aggregated_stats[name]['total'] += stats.get('total', 0)
+            mult_factor = 2 if aggregated_stats[name]['is_pre_t'] else 1
+            
+            aggregated_stats[name]['goals'] += stats.get('goals', 0) * mult_factor
+            aggregated_stats[name]['motm'] += stats.get('motm', 0) * mult_factor
+            aggregated_stats[name]['total'] += stats.get('total', 0) * mult_factor
             if is_completed: aggregated_stats[name]['is_completed'] = True
 
 
@@ -111,10 +129,11 @@ def render_player_performance_view(email, date, preds):
     for j, col in enumerate(cols):
         name = player_names[j]
         stats = aggregated_stats.get(name, {})
+        mult_label = "Yes" if stats['is_pre_t'] else "No"
         with col.container(border=True):
             if stats['is_completed']:
                 st.metric(label=name, value=stats.get('total', 0))
-                st.caption(f"Goals: {stats.get('goals', 0)} | MOTM: {stats.get('motm', 0)}")
+                st.caption(f"Goals: {stats.get('goals', 0)} | MOTM: {stats.get('motm', 0)} | Mult: {mult_label}")
             else:
                 st.metric(label=name, value=None)
                 st.caption("To be calculated1")
@@ -177,31 +196,109 @@ def render_filtered_participant_view(viewer_email: str, is_admin: bool):
             if not pre_t:
                 st.info("No picks found for this user.")
             else:
+                # Calculate total points earned by each Pre-T selection
+                teams = pre_t.get("teams", [])
+                players_raw = pre_t.get("players", [])
+                players = [p.get('name', p) if isinstance(p, dict) else p for p in players_raw]
+
+                team_points_map = {t: 0 for t in teams}
+                team_played_map = {t: False for t in teams}
+                team_wins = {t: 0 for t in teams}
+                team_losses = {t: 0 for t in teams}
+                team_draws = {t: 0 for t in teams}
+                team_gd = {t: 0 for t in teams}
+                
+                player_points_map_total = {p: 0 for p in players}
+                player_goals_map = {p: 0 for p in players}
+                player_motm_map = {p: 0 for p in players}
+                player_played_map = {p: False for p in players}
+
+                all_dates_matches = get_matches_by_date()
+
+                for date, matches_on_date in all_dates_matches.items():
+                    if not isinstance(matches_on_date, dict): continue
+                    
+                    daily_picks = get_daily_predictions(selected_email, date)
+                    daily_players_raw = daily_picks.get("players", [])
+                    daily_players = [str(p.get('name', p) if isinstance(p, dict) else p).strip().lower() for p in daily_players_raw]
+
+                    for match_id, match_data in matches_on_date.items():
+                        if match_data.get("status") == "completed":
+                            m_points = get_match_points_breakdown(match_id)
+                            breakdown = get_user_match_breakdown(selected_email, date, match_id)
+                            
+                            # Calculate team points
+                            for t in teams:
+                                t_metrics = m_points.get("team_points", {}).get(t)
+                                if t_metrics is not None:
+                                    team_points_map[t] += breakdown.get("team_points", 0)
+                                    team_played_map[t] = True
+                                    
+                                    # Parse match W/L/D and GD
+                                    win_val = t_metrics.get("win", 0)
+                                    gd_val = t_metrics.get("goaldiff", 0)
+                                    team_gd[t] += int(gd_val / 5)
+                                    
+                                    if win_val == 10:
+                                        team_wins[t] += 1
+                                    elif gd_val == 0:
+                                        team_draws[t] += 1
+                                    else:
+                                        team_losses[t] += 1
+                                    
+                            # Calculate player points (2x for pre-t selection)
+                            for p in players:
+                                p_norm = str(p).strip().lower()
+                                if p_norm in daily_players:
+                                    p_stats_map = m_points.get("player_points", {})
+                                    db_player_map = {str(k).strip().lower(): v for k, v in p_stats_map.items()}
+                                    p_stats = db_player_map.get(p_norm, {})
+                                    if p_stats:
+                                        player_points_map_total[p] += p_stats.get("total", 0) * 2
+                                        player_goals_map[p] += p_stats.get("goals", 0)
+                                        player_motm_map[p] += p_stats.get("motm", 0)
+                                        player_played_map[p] = True
+
                 # Vertical Stacking of Categories
                 st.markdown("#### 🛡️ Pre-t Teams")
                 # Grouping teams into rows of 3
-                teams = pre_t.get("teams", [])
                 for i in range(0, len(teams), 3):
                     cols = st.columns(3)
                     for j, col in enumerate(cols):
                         if i + j < len(teams):
-                            # Display Name as metric, Points as label with border
+                            t_name = teams[i+j]
+                            has_played = team_played_map.get(t_name, False)
+                            t_pts = team_points_map.get(t_name, 0)
+                            w = team_wins.get(t_name, 0)
+                            l = team_losses.get(t_name, 0)
+                            d = team_draws.get(t_name, 0)
+                            gd = team_gd.get(t_name, 0)
                             with col.container(border=True):
-                                st.metric(label=teams[i+j], value=None)
-                                st.caption(f"Not played yet")
+                                if has_played:
+                                    st.metric(label=t_name, value=f"{t_pts} pts")
+                                    st.caption(f"W: {w} | L: {l} | D: {d} | GD: {gd}")
+                                else:
+                                    st.metric(label=t_name, value="-")
+                                    st.caption("Not played yet")
 
                 st.markdown("#### 👤 Pre-t Players")
                 # Grouping players into rows of 5
-                players = pre_t.get("players", [])
                 if players:
                     cols = st.columns(len(players))
                     for j, col in enumerate(cols):
                         if j < len(players):
-                            name = players[j].get('name', players[j]) if isinstance(players[j], dict) else players[j]
-                            # Display Name as metric, Points as label with border
+                            name = players[j]
+                            has_played = player_played_map.get(name, False)
+                            p_pts = player_points_map_total.get(name, 0)
+                            g_count = int(player_goals_map.get(name, 0) / 10)
+                            m_count = int(player_motm_map.get(name, 0) / 20)
                             with col.container(border=True):
-                                st.metric(label=name, value=None)
-                                st.caption(f"Not played yet")
+                                if has_played:
+                                    st.metric(label=name, value=f"{p_pts} pts")
+                                    st.caption(f"G: {g_count} | MOTM: {m_count}")
+                                else:
+                                    st.metric(label=name, value="-")
+                                    st.caption("Not played yet")
 
     elif view_type == "Daily Predictions":
         # 3. Date Selection (Multiple)
