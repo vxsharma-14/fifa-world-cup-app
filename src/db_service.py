@@ -201,4 +201,25 @@ def get_all_roster_players() -> list:
     for team, players in rosters.items():
         if isinstance(players, list):
             all_players.extend(players)
-    return sorted(list(set(all_players))) # Unique and sorted
+    return sorted(list(set(all_players)))  # Unique and sorted
+
+
+def get_roster_player_team_map() -> dict[str, str]:
+    """Fetches a lookup map from roster player name to country team name.
+
+    Returns:
+        Mapping of player names to their associated country team names.
+    """
+    rosters = db.reference("rosters").get() or {}
+    player_team_map = {}
+
+    for team, players in rosters.items():
+        if not isinstance(players, list):
+            continue
+
+        for player in players:
+            player_name = str(player).strip()
+            if player_name and player_name not in player_team_map:
+                player_team_map[player_name] = str(team).strip()
+
+    return player_team_map

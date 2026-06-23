@@ -5,7 +5,8 @@ import zoneinfo
 import streamlit as st
 from src.db_service import (
     get_pre_tournament_picks, save_pre_tournament_picks,
-    get_daily_predictions, save_daily_predictions, get_pt_date_key, get_all_roster_players, get_match_cutoff_dt
+    get_daily_predictions, save_daily_predictions, get_pt_date_key,
+    get_all_roster_players, get_match_cutoff_dt, get_roster_player_team_map
 )
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
@@ -13,6 +14,7 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     PT = zoneinfo.ZoneInfo("US/Pacific")
     now_pt = datetime.now(PT)
     all_roster_players = get_all_roster_players()
+    roster_player_team_map = get_roster_player_team_map()
     
     st.subheader("📅 Predictions Dashboard")
 
@@ -107,7 +109,7 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
         if p.get('team') in playing_teams_active:
             active_pre_t_players.append(p)
 
-    with st.form("daily_prediction_form"):
+    with st.container():
         st.markdown(f"### 🗓️ Matchday: {target_date}")
         col_m, col_p = st.columns([1, 3])
         
@@ -183,10 +185,15 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
                     idx = options.index(current_name) if current_name in options else 0
                     
                     p_name = c1.selectbox(f"Player {slot_idx+1} Name", options=options, index=idx, key=f"daily_p_name_{slot_idx}")
-                    p_team = c2.text_input(f"Player {slot_idx+1} Team", value=current_pick.get('team', ''), key=f"daily_p_team_{slot_idx}")
+                    p_team = roster_player_team_map.get(p_name, "")
+                    c2.text_input(
+                        f"Player {slot_idx+1} Team",
+                        value=p_team,
+                        disabled=True,
+                    )
                     daily_player_inputs.append({'name': p_name, 'team': p_team})
 
-        if st.form_submit_button("Submit Predictions", type="primary"):
+        if st.button("Submit Predictions", type="primary"):
             player_list = [p for p in daily_player_inputs if p['name'].strip()]
             save_daily_predictions(email, target_date, selected_winners, player_list)
             
