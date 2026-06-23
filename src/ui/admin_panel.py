@@ -6,7 +6,8 @@ import zoneinfo
 from firebase_admin import db
 from src.db_service import (
     get_scheduled_matches, save_structured_match,
-    delete_all_matches, save_match_result, get_match_results, get_pt_timestamp
+    delete_all_matches, save_match_result, get_match_results, get_pt_timestamp,
+    get_rosters
 )
 from src.ui.leaderboard import render_leaderboard_table
 
@@ -57,7 +58,7 @@ def render_admin_dashboard() -> None:
         st.subheader("👥 Manage Team Rosters")
         
         # 1. Fetch Rosters
-        rosters = db.reference("rosters").get() or {}
+        rosters = get_rosters()
         
         # 2. Add/Edit Form
         with st.form("roster_update_form"):

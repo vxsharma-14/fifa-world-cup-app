@@ -176,6 +176,78 @@ def get_all_users() -> dict:
     """Fetches all registered users from the system."""
     return db.reference("users").get() or {}
 
+
+def get_rosters() -> dict[str, list[str]]:
+    """Fetches all country rosters from the system.
+
+    Returns:
+        Mapping of country team names to roster player names.
+    """
+    rosters = db.reference("rosters").get() or {}
+    normalized_rosters = {}
+    for team, players in rosters.items():
+        team_name = str(team).strip()
+        if not team_name or not isinstance(players, list):
+            continue
+
+        normalized_rosters[team_name] = [
+            str(player).strip()
+            for player in players
+            if str(player).strip()
+        ]
+
+    return normalized_rosters
+
+
+def get_favorite_players(email: str) -> list[dict[str, str]]:
+    """Fetches a user's favorite player watchlist.
+
+    Args:
+        email: User email address.
+
+    Returns:
+        List of favorite player dictionaries with name and team values.
+    """
+    favorites = db.reference(f"favorite_players/{clean_email_key(email)}").get() or []
+    if not isinstance(favorites, list):
+        return []
+
+    normalized_favorites = []
+    for player in favorites:
+        if not isinstance(player, dict):
+            continue
+
+        name = str(player.get("name", "")).strip()
+        team = str(player.get("team", "")).strip()
+        if name and team:
+            normalized_favorites.append({"name": name, "team": team})
+
+    return normalized_favorites
+
+
+def save_favorite_players(email: str, favorite_players: list[dict[str, str]]) -> None:
+    """Saves a user's favorite player watchlist.
+
+    Args:
+        email: User email address.
+        favorite_players: Favorite player dictionaries with name and team values.
+    """
+    normalized_players = []
+    seen_players = set()
+
+    for player in favorite_players:
+        name = str(player.get("name", "")).strip()
+        team = str(player.get("team", "")).strip()
+        player_key = (name.lower(), team.lower())
+
+        if not name or not team or player_key in seen_players:
+            continue
+
+        seen_players.add(player_key)
+        normalized_players.append({"name": name, "team": team})
+
+    db.reference(f"favorite_players/{clean_email_key(email)}").set(normalized_players)
+
 def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_players: list) -> None:
     """Admin tool to explicitly insert or override a specific match prediction for a user."""
     cleaned_email = clean_email_key(email)
@@ -196,11 +268,9 @@ def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_pl
 
 def get_all_roster_players() -> list:
     """Fetches all player names across all teams from the rosters node."""
-    rosters = db.reference("rosters").get() or {}
     all_players = []
-    for team, players in rosters.items():
-        if isinstance(players, list):
-            all_players.extend(players)
+    for players in get_rosters().values():
+        all_players.extend(players)
     return sorted(list(set(all_players)))  # Unique and sorted
 
 
@@ -210,13 +280,9 @@ def get_roster_player_team_map() -> dict[str, str]:
     Returns:
         Mapping of player names to their associated country team names.
     """
-    rosters = db.reference("rosters").get() or {}
     player_team_map = {}
 
-    for team, players in rosters.items():
-        if not isinstance(players, list):
-            continue
-
+    for team, players in get_rosters().items():
         for player in players:
             player_name = str(player).strip()
             if player_name and player_name not in player_team_map:

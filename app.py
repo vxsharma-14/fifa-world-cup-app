@@ -11,6 +11,7 @@ from src.ui.data_viewer import render_filtered_participant_view
 from src.ui.points_analysis import render_granular_points_analysis
 from src.ui.tournament_setup import render_tournament_setup
 from src.ui.sidebar import render_sidebar_elements
+from src.ui.player_watchlist import render_player_watchlist
 
 def main() -> None:
     st.set_page_config(page_title="Fifa Fantasy APSJ", layout="wide", initial_sidebar_state="auto")
@@ -35,7 +36,13 @@ def main() -> None:
 
     # --- PAGE NAVIGATION MENU ---
     st.sidebar.markdown("### 🧭 Main Navigation")
-    page_options = ["🏠 Dashboard Home", "🏆 Tournament Setup", "📝 Daily Predictions", "🔍 Detailed Points Audit"]
+    page_options = [
+        "🏠 Dashboard Home",
+        "🏆 Tournament Setup",
+        "📝 Daily Predictions",
+        "Player Watchlist",
+        "🔍 Detailed Points Audit",
+    ]
 
     # Robust session state initialization
     if "current_page" not in st.session_state or st.session_state["current_page"] not in page_options:
@@ -63,6 +70,9 @@ def main() -> None:
         from src.db_service import get_matches_by_date
         raw_matches_nested = get_matches_by_date()
         render_daily_predictions_section(active_email, raw_matches_nested)
+
+    elif st.session_state["current_page"] == "Player Watchlist":
+        render_player_watchlist(active_email)
 
     elif st.session_state["current_page"] == "🔍 Detailed Points Audit":
         render_filtered_participant_view(active_email, is_admin=False)
