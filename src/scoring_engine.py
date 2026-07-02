@@ -2,6 +2,7 @@
 New scoring engine providing centralized, source-of-truth logic for points calculation.
 """
 from typing import Dict, Any
+from src.pre_tournament import apply_phase_multiplier, pick_multiplier_map
 
 
 SCORING_RULES: Dict[str, Dict[str, int]] = {
@@ -126,15 +127,8 @@ def calculate_user_match_breakdown(
         if isinstance(d, dict): return d.get("total", 0)
         return d if isinstance(d, int) else 0
 
-    pre_t_teams = pre_t.get("teams", [])
-    raw_pre_t_players = pre_t.get("players", [])
-    
-    pre_t_players = []
-    for p in raw_pre_t_players:
-        if isinstance(p, dict):
-            pre_t_players.append(str(p.get('name', '')).strip().lower())
-        else:
-            pre_t_players.append(str(p).strip().lower())
+    pre_t_team_multipliers = pick_multiplier_map(pre_t.get("teams", []))
+    pre_t_player_multipliers = pick_multiplier_map(pre_t.get("players", []))
     
     team_pick = daily.get('teams', {}).get(match_id)
     raw_player_picks = daily.get('players', [])
@@ -145,24 +139,31 @@ def calculate_user_match_breakdown(
         player_picks.append(str(name).strip().lower())
     
     team_pts = get_total(m_points.get('team_points', {}).get(team_pick, 0))
-    team_multiplier = (team_pick in pre_t_teams)
-    final_team_pts = team_pts * 2 if team_multiplier else team_pts
+    team_multiplier_value = pre_t_team_multipliers.get(str(team_pick).strip().lower(), 1)
+    team_multiplier = team_multiplier_value > 1
+    final_team_pts = apply_phase_multiplier(team_pts, team_multiplier_value)
     
     player_pts = 0
+    player_multipliers = {}
     player_points_db = m_points.get('player_points', {})
     db_player_map = {str(k).strip().lower(): v for k, v in player_points_db.items()}
 
     for p_norm in player_picks:
         p_pts = get_total(db_player_map.get(p_norm, 0))
-        if p_norm in pre_t_players:
-            p_pts *= 2
+        player_multiplier_value = pre_t_player_multipliers.get(p_norm, 1)
+        player_multipliers[p_norm] = player_multiplier_value
+        p_pts = apply_phase_multiplier(p_pts, player_multiplier_value)
         player_pts += p_pts
     
-    player_multiplier = any(p_norm in pre_t_players for p_norm in player_picks)
+    player_multiplier = any(multiplier > 1 for multiplier in player_multipliers.values())
+    player_multiplier_value = max(player_multipliers.values(), default=1)
 
     return {
         "team_points": final_team_pts,
         "player_points": player_pts,
         "team_multiplier": team_multiplier,
         "player_multiplier": player_multiplier,
+        "team_multiplier_value": team_multiplier_value,
+        "player_multiplier_value": player_multiplier_value,
+        "player_multipliers": player_multipliers,
     }

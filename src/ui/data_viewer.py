@@ -4,6 +4,7 @@ import streamlit as st
 from datetime import datetime, timedelta
 import zoneinfo
 from src.db_service import get_all_users, get_daily_predictions, get_scheduled_matches, get_pre_tournament_picks, clean_email_key, get_user_match_breakdown, get_match_points_breakdown, get_matches_by_date
+from src.pre_tournament import apply_phase_multiplier, pick_multiplier_map, pick_names
 
 PT = zoneinfo.ZoneInfo("US/Pacific")
 
@@ -58,12 +59,12 @@ def render_daily_prediction_card(email, date, match_id, match_data, prediction, 
                 # Point Breakup from match_points node
                 team_metrics = match_points.get('team_points', {}).get(prediction, {})
                 is_mult = breakdown.get('team_multiplier', False)
-                mult_factor = 2 if is_mult else 1
+                mult_factor = breakdown.get('team_multiplier_value', 2 if is_mult else 1)
                 
-                win_pts = team_metrics.get('win', 0) * mult_factor
-                gd_pts = team_metrics.get('goaldiff', 0) * mult_factor
+                win_pts = apply_phase_multiplier(team_metrics.get('win', 0), mult_factor)
+                gd_pts = apply_phase_multiplier(team_metrics.get('goaldiff', 0), mult_factor)
                 total_pts = breakdown.get('team_points', 0)
-                mult = "Yes" if is_mult else "No"
+                mult = f"{mult_factor}x" if is_mult else "No"
 
                 with st.container(border=True):
                     if is_completed:
@@ -84,13 +85,7 @@ def render_player_performance_view(email, date, preds):
 
     # Fetch Pre-Tournament picks to identify if multiplier applies to each player
     pre_t = get_pre_tournament_picks(email)
-    raw_pre_t_players = pre_t.get("players", [])
-    pre_t_players = []
-    for p in raw_pre_t_players:
-        if isinstance(p, dict):
-            pre_t_players.append(str(p.get('name', '')).strip().lower())
-        else:
-            pre_t_players.append(str(p).strip().lower())
+    pre_t_player_multipliers = pick_multiplier_map(pre_t.get("players", []))
 
     # We need to map matches on this date to their match_points
     all_matches = get_scheduled_matches()
@@ -105,7 +100,13 @@ def render_player_performance_view(email, date, preds):
 
     # Structure: {player_name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False, 'is_pre_t': False}}
     aggregated_stats = {
-        name: {'goals': 0, 'motm': 0, 'total': 0, 'is_completed': False, 'is_pre_t': name.strip().lower() in pre_t_players} 
+        name: {
+            'goals': 0,
+            'motm': 0,
+            'total': 0,
+            'is_completed': False,
+            'multiplier': pre_t_player_multipliers.get(name.strip().lower(), 1),
+        }
         for name in player_names
     }
 
@@ -116,11 +117,11 @@ def render_player_performance_view(email, date, preds):
 
         for name in player_names:
             stats = player_points_map.get(name, {})
-            mult_factor = 2 if aggregated_stats[name]['is_pre_t'] else 1
+            mult_factor = aggregated_stats[name]['multiplier']
             
-            aggregated_stats[name]['goals'] += stats.get('goals', 0) * mult_factor
-            aggregated_stats[name]['motm'] += stats.get('motm', 0) * mult_factor
-            aggregated_stats[name]['total'] += stats.get('total', 0) * mult_factor
+            aggregated_stats[name]['goals'] += apply_phase_multiplier(stats.get('goals', 0), mult_factor)
+            aggregated_stats[name]['motm'] += apply_phase_multiplier(stats.get('motm', 0), mult_factor)
+            aggregated_stats[name]['total'] += apply_phase_multiplier(stats.get('total', 0), mult_factor)
             if is_completed: aggregated_stats[name]['is_completed'] = True
 
 
@@ -129,7 +130,8 @@ def render_player_performance_view(email, date, preds):
     for j, col in enumerate(cols):
         name = player_names[j]
         stats = aggregated_stats.get(name, {})
-        mult_label = "Yes" if stats['is_pre_t'] else "No"
+        mult_factor = stats.get('multiplier', 1)
+        mult_label = f"{mult_factor}x" if mult_factor > 1 else "No"
         with col.container(border=True):
             if stats['is_completed']:
                 st.metric(label=name, value=stats.get('total', 0))
@@ -178,7 +180,7 @@ def render_filtered_participant_view(viewer_email: str, is_admin: bool):
                 # Skip admin
                 if "admin" in u.get("name", "").lower(): continue
                 pre_t = get_pre_tournament_picks(email)
-                teams = pre_t.get("teams", [])
+                teams = pick_names(pre_t.get("teams", []))
                 # Extract names if player is a dict, otherwise use string
                 players = [p.get('name', p) if isinstance(p, dict) else p for p in pre_t.get("players", [])]
 
@@ -197,9 +199,10 @@ def render_filtered_participant_view(viewer_email: str, is_admin: bool):
                 st.info("No picks found for this user.")
             else:
                 # Calculate total points earned by each Pre-T selection
-                teams = pre_t.get("teams", [])
+                teams = pick_names(pre_t.get("teams", []))
                 players_raw = pre_t.get("players", [])
                 players = [p.get('name', p) if isinstance(p, dict) else p for p in players_raw]
+                player_multiplier_lookup = pick_multiplier_map(players_raw)
 
                 team_points_map = {t: 0 for t in teams}
                 team_played_map = {t: False for t in teams}
@@ -254,7 +257,8 @@ def render_filtered_participant_view(viewer_email: str, is_admin: bool):
                                     db_player_map = {str(k).strip().lower(): v for k, v in p_stats_map.items()}
                                     p_stats = db_player_map.get(p_norm, {})
                                     if p_stats:
-                                        player_points_map_total[p] += p_stats.get("total", 0) * 2
+                                        multiplier = player_multiplier_lookup.get(p_norm, 1)
+                                        player_points_map_total[p] += apply_phase_multiplier(p_stats.get("total", 0), multiplier)
                                         player_goals_map[p] += p_stats.get("goals", 0)
                                         player_motm_map[p] += p_stats.get("motm", 0)
                                         player_played_map[p] = True

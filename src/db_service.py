@@ -4,6 +4,11 @@ import hashlib
 import zoneinfo
 from datetime import datetime, timedelta, timezone
 from firebase_admin import db
+from src.pre_tournament import (
+    normalize_player_pick,
+    normalize_pre_tournament_picks,
+    normalize_team_pick,
+)
 
 # US Pacific Time (PDT) is UTC-7
 PT_OFFSET = timedelta(hours=-7)
@@ -93,22 +98,25 @@ def update_matches(matches_list: list) -> None:
 
 def get_pre_tournament_picks(email: str) -> dict:
     """Fetches locked pre-tournament selections for a specific profile."""
-    return db.reference(f"pre_tournament/{clean_email_key(email)}").get() or {}
+    data = db.reference(f"pre_tournament/{clean_email_key(email)}").get() or {}
+    return normalize_pre_tournament_picks(data)
 
 def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
     """Saves locked pre-tournament choices to database tracking."""
-    # Normalize players list
+    normalized_teams = []
+    for team in teams:
+        normalized_team = normalize_team_pick(team)
+        if normalized_team["name"]:
+            normalized_teams.append(normalized_team)
+
     normalized_players = []
-    for p in players:
-        if isinstance(p, dict):
-            p['name'] = p.get('name', '').strip().title()
-            p['team'] = p.get('team', '').strip().title()
-            normalized_players.append(p)
-        else:
-            normalized_players.append(str(p).strip().title())
+    for player in players:
+        normalized_player = normalize_player_pick(player)
+        if normalized_player["name"]:
+            normalized_players.append(normalized_player)
 
     db.reference(f"pre_tournament/{clean_email_key(email)}").set({
-        "teams": [t.strip().title() for t in teams],
+        "teams": normalized_teams,
         "players": normalized_players,
         "submitted_at": get_pt_timestamp()
     })

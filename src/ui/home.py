@@ -7,6 +7,7 @@ from src.ui.leaderboard import render_leaderboard_table
 from firebase_admin import db
 from datetime import datetime, timedelta
 import zoneinfo
+from src.pre_tournament import get_pick_name
 
 @st.dialog("📊 Global Tournament Leaderboard")
 def show_leaderboard_popup() -> None:
@@ -64,7 +65,7 @@ def render_home_summary_dashboard(email: str) -> None:
             st.markdown("### 🛡️ Locked Teams")
             if teams:
                 for team in teams:
-                    st.markdown(f"• **{team}**")
+                    st.markdown(f"• **{get_pick_name(team)}**")
             else:
                 st.caption("No teams locked.")
         

@@ -8,6 +8,7 @@ from src.db_service import (
     get_daily_predictions, save_daily_predictions, get_pt_date_key,
     get_all_roster_players, get_match_cutoff_dt, get_roster_player_team_map
 )
+from src.pre_tournament import pick_names
 
 def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
     """Processes upcoming match predictions, filtering out graded matches and locking by PT."""
@@ -87,7 +88,7 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
 
     # Fetch Pre-T picks
     pre_t_picks = get_pre_tournament_picks(email)
-    pre_t_teams = pre_t_picks.get("teams", [])
+    pre_t_teams = pick_names(pre_t_picks.get("teams", []))
     raw_pre_t_players = pre_t_picks.get("players", [])
 
     # Ensure pre_t_players are dictionaries
