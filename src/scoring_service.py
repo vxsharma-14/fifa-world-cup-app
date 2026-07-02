@@ -6,10 +6,17 @@ from typing import Dict, Any
 
 from src.scoring_engine import calculate_match_points_for_db, calculate_user_match_breakdown
 
-def update_match_points_node(match_id: str, match_result: Dict[str, Any], date: str, home_team: str, away_team: str) -> None:
+def update_match_points_node(
+    match_id: str,
+    match_result: Dict[str, Any],
+    date: str,
+    home_team: str,
+    away_team: str,
+    scoring_stage: str = "league",
+) -> None:
     """Calculates and stores points for players/teams for a specific match with normalized names."""
     
-    points = calculate_match_points_for_db(match_result, home_team, away_team)
+    points = calculate_match_points_for_db(match_result, home_team, away_team, scoring_stage)
     points["et_date"] = date
     
     db.reference(f"match_points/{match_id}").set(points)

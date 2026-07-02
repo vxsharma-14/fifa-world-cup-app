@@ -3,7 +3,58 @@ New scoring engine providing centralized, source-of-truth logic for points calcu
 """
 from typing import Dict, Any
 
-def calculate_match_points_for_db(match_result: Dict[str, Any], home_team: str, away_team: str) -> Dict[str, Any]:
+
+SCORING_RULES: Dict[str, Dict[str, int]] = {
+    "league": {
+        "goal": 10,
+        "motm": 20,
+        "correct_result": 10,
+        "goal_difference": 5,
+    },
+    "R32": {
+        "goal": 20,
+        "motm": 40,
+        "correct_result": 20,
+        "goal_difference": 10,
+    },
+    "R16": {
+        "goal": 40,
+        "motm": 80,
+        "correct_result": 40,
+        "goal_difference": 20,
+    },
+    "QF": {
+        "goal": 80,
+        "motm": 160,
+        "correct_result": 80,
+        "goal_difference": 40,
+    },
+    "SF": {
+        "goal": 160,
+        "motm": 320,
+        "correct_result": 160,
+        "goal_difference": 80,
+    },
+    "F": {
+        "goal": 320,
+        "motm": 640,
+        "correct_result": 320,
+        "goal_difference": 160,
+    },
+}
+
+
+def get_scoring_rules(scoring_stage: str) -> Dict[str, int]:
+    """Returns configured scoring rules for a match stage."""
+    return SCORING_RULES.get(scoring_stage, SCORING_RULES["league"])
+
+
+def calculate_match_points_for_db(
+    match_result: Dict[str, Any],
+    home_team: str,
+    away_team: str,
+    scoring_stage: str = "league",
+) -> Dict[str, Any]:
     """
     Core logic extracted from update_match_points_node.
     Calculates points for players/teams for a specific match.
@@ -11,8 +62,14 @@ def calculate_match_points_for_db(match_result: Dict[str, Any], home_team: str, 
     def normalize_name(name: str) -> str:
         return name.strip().title()
 
+    rules = get_scoring_rules(scoring_stage)
+    result_points = rules["correct_result"]
+    goal_diff_points = rules["goal_difference"]
+    goal_points = rules["goal"]
+    motm_points = rules["motm"]
+
     points = {
-        "scoring_stage": "league",
+        "scoring_stage": scoring_stage if scoring_stage in SCORING_RULES else "league",
         "team_points": {},
         "player_points": {}
     }
@@ -23,15 +80,15 @@ def calculate_match_points_for_db(match_result: Dict[str, Any], home_team: str, 
     diff = h_score - a_score
     
     if diff > 0: # Home win
-        points["team_points"][home_team] = {"win": 10, "goaldiff": (diff * 5), "total": (diff * 5) + 10}
-        points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * 5) * -1, "total": (diff * 5) * -1}
+        points["team_points"][home_team] = {"win": result_points, "goaldiff": (diff * goal_diff_points), "total": (diff * goal_diff_points) + result_points}
+        points["team_points"][away_team] = {"win": 0, "goaldiff": (diff * goal_diff_points) * -1, "total": (diff * goal_diff_points) * -1}
     elif diff < 0: # Away win
-        points["team_points"][home_team] = {"win": 0, "goaldiff": (diff * 5), "total": (diff * 5)}
-        points["team_points"][away_team] = {"win": 10, "goaldiff": (abs(diff) * 5), "total": (abs(diff) * 5) + 10}
+        points["team_points"][home_team] = {"win": 0, "goaldiff": (diff * goal_diff_points), "total": (diff * goal_diff_points)}
+        points["team_points"][away_team] = {"win": result_points, "goaldiff": (abs(diff) * goal_diff_points), "total": (abs(diff) * goal_diff_points) + result_points}
     else: # Draw
         points["team_points"][home_team] = {"win": 0, "goaldiff": 0, "total": 0}
         points["team_points"][away_team] = {"win": 0, "goaldiff": 0, "total": 0}
-        points["team_points"]["Draw"] = {"win": 0, "goaldiff": 0, "total": 10}
+        points["team_points"]["Draw"] = {"win": 0, "goaldiff": 0, "total": result_points}
     
     # Calculate Player points
     home_scorers = [normalize_name(p) for p in match_result.get("home_scorers", [])]
@@ -46,9 +103,10 @@ def calculate_match_points_for_db(match_result: Dict[str, Any], home_team: str, 
         
     for player in all_involved:
         goals = all_scorers.count(player)
-        motm_bonus = 20 if player == motm else 0
-        p_pts = (goals * 10) + motm_bonus
-        points["player_points"][player] = {"goals": goals * 10, "motm": motm_bonus, "total": p_pts}
+        goal_total = goals * goal_points
+        motm_bonus = motm_points if player == motm else 0
+        p_pts = goal_total + motm_bonus
+        points["player_points"][player] = {"goals": goal_total, "motm": motm_bonus, "total": p_pts}
         
     return points
 

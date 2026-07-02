@@ -65,7 +65,14 @@ def get_pt_date_key(dt: datetime = None) -> str:
         dt = dt.astimezone(timezone(PT_OFFSET))
     return dt.strftime("%Y-%m-%d")
 
-def save_structured_match(match_id: str, home: str, away: str, kickoff_iso: str, display_str: str) -> None:
+def save_structured_match(
+    match_id: str,
+    home: str,
+    away: str,
+    kickoff_iso: str,
+    display_str: str,
+    scoring_stage: str = "league",
+) -> None:
     """Saves a match node with the date-indexed structure: metadata/{date}/{match_id}."""
     kickoff_dt = datetime.fromisoformat(kickoff_iso)
     date_key = get_pt_date_key(kickoff_dt)
@@ -76,6 +83,7 @@ def save_structured_match(match_id: str, home: str, away: str, kickoff_iso: str,
         "away_team": away,
         "kickoff_time": kickoff_iso,
         "display_string": display_str,
+        "scoring_stage": scoring_stage,
         "status": "scheduled"
     })
 
@@ -150,15 +158,25 @@ def save_match_result(match_id: str, result_data: dict) -> None:
     if not target_match:
         raise ValueError(f"Match {match_id} not found in metadata.")
 
+    scoring_stage = result_data.get("scoring_stage") or target_match.get("scoring_stage", "league")
+
     # Update match metadata with results and status
     match_ref = db.reference(f"metadata/{target_date}/{match_id}")
     match_ref.update({
         "results": result_data,
+        "scoring_stage": scoring_stage,
         "status": "completed"
     })
 
     # Trigger entity-level point update
-    update_match_points_node(match_id, result_data, target_date, target_match.get("home_team"), target_match.get("away_team"))
+    update_match_points_node(
+        match_id,
+        result_data,
+        target_date,
+        target_match.get("home_team"),
+        target_match.get("away_team"),
+        scoring_stage,
+    )
 
 def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""

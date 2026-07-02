@@ -11,6 +11,16 @@ from src.db_service import (
 )
 from src.ui.leaderboard import render_leaderboard_table
 
+SCORING_STAGE_OPTIONS = {
+    "league": "League",
+    "R32": "Round of 32",
+    "R16": "Round of 16",
+    "QF": "Quarter Final",
+    "SF": "Semi Final",
+    "F": "Final",
+}
+
+
 def render_admin_dashboard() -> None:
     """Renders structured scheduling calendars, match grading forms, and support tools."""
     st.header("👑 Admin Command Center")
@@ -97,6 +107,13 @@ def render_admin_dashboard() -> None:
             with col_t:
                 match_time = st.time_input("Kickoff Time (PT)", time(12, 00))
 
+            scoring_stage = st.selectbox(
+                "Scoring Stage",
+                options=list(SCORING_STAGE_OPTIONS.keys()),
+                format_func=lambda stage: SCORING_STAGE_OPTIONS[stage],
+                index=0,
+            )
+
             if st.form_submit_button("➕ Add Match to Master Calendar"):
                 if not home_team or not away_team:
                     st.error("Please provide both team names.")
@@ -109,7 +126,14 @@ def render_admin_dashboard() -> None:
                     display_str = f"{timestamp_str} | {home_team} vs {away_team}"
                     match_id = f"match_{int(datetime.now().timestamp())}"
 
-                    save_structured_match(match_id, home_team, away_team, kickoff_iso, display_str)
+                    save_structured_match(
+                        match_id,
+                        home_team,
+                        away_team,
+                        kickoff_iso,
+                        display_str,
+                        scoring_stage,
+                    )
                     st.success(f"Successfully scheduled: {display_str}")
                     st.rerun()
 
@@ -159,6 +183,17 @@ def render_admin_dashboard() -> None:
                 
                 with st.expander(f"{date_str} {time_str} | {home} vs {away} {'✅' if has_results else '⏳'}"):
                     with st.form(f"form_{m_id}"):
+                        current_stage = m_data.get("scoring_stage") or m.get("scoring_stage", "league")
+                        stage_options = list(SCORING_STAGE_OPTIONS.keys())
+                        stage_index = stage_options.index(current_stage) if current_stage in stage_options else 0
+                        scoring_stage = st.selectbox(
+                            "Scoring Stage",
+                            options=stage_options,
+                            format_func=lambda stage: SCORING_STAGE_OPTIONS[stage],
+                            index=stage_index,
+                            key=f"scoring_stage_{m_id}",
+                        )
+
                         # 1. Score
                         c_s1, c_s2 = st.columns(2)
                         h_score = c_s1.number_input("Home Goals", min_value=0, value=int(m_data.get("home_score", 0)), step=1)
@@ -227,7 +262,8 @@ def render_admin_dashboard() -> None:
                                 "away_scorers": a_scorers,
                                 "yellow_cards": yellow,
                                 "red_cards": red, 
-                                "player_of_the_match": norm(motm) if motm else ""
+                                "player_of_the_match": norm(motm) if motm else "",
+                                "scoring_stage": scoring_stage,
                             })
                             # Clear session state for next edit
                             del st.session_state[s_key]
