@@ -4,10 +4,11 @@ import streamlit as st
 from datetime import datetime, time
 import zoneinfo
 from firebase_admin import db
+from src.config import CONFIG
 from src.db_service import (
     get_scheduled_matches, save_structured_match,
     delete_all_matches, save_match_result, get_match_results, get_pt_timestamp,
-    get_rosters
+    get_rosters, get_all_users, set_user_active
 )
 from src.ui.leaderboard import render_leaderboard_table
 
@@ -50,12 +51,13 @@ def render_admin_dashboard() -> None:
             else:
                 upcoming_admin_list.append(match)
 
-    tab_sched, tab_grade, tab_part, tab_override, tab_leaderboard, tab_rosters = st.tabs([
+    tab_sched, tab_grade, tab_part, tab_override, tab_leaderboard, tab_users, tab_rosters = st.tabs([
         "📅 Matches & Scheduling", 
         "⚽ Results & Grading", 
         "👥 Participants", 
         "💬 Overrides",
         "🏆 Leaderboard",
+        "👥 User Control",
         "👥 Rosters"
     ])
 
@@ -392,3 +394,38 @@ def render_admin_dashboard() -> None:
     with tab_leaderboard:
         st.subheader("🏆 Global Leaderboard")
         render_leaderboard_table()
+
+    # -------------------------------------------------------------
+    # TAB 6: USER CONTROL
+    # -------------------------------------------------------------
+    with tab_users:
+        st.subheader("👥 Enable / Disable Users")
+        st.caption("Disabled users keep their data, but cannot sign in.")
+
+        all_users = get_all_users()
+        managed_users = [
+            user
+            for user in all_users.values()
+            if user.get("email") and user.get("email") != CONFIG.ADMIN_EMAIL
+        ]
+
+        if not managed_users:
+            st.info("No users found to manage.")
+        else:
+            for user in sorted(managed_users, key=lambda u: u.get("name", "").lower()):
+                user_email = user.get("email", "")
+                user_name = user.get("name", user_email)
+                current_active = bool(user.get("is_active", True))
+
+                with st.expander(f"{user_name} ({user_email})", expanded=False):
+                    st.write(f"Status: {'Enabled' if current_active else 'Disabled'}")
+                    new_active = st.toggle(
+                        "Account Enabled",
+                        value=current_active,
+                        key=f"user_active_toggle_{user_email}",
+                    )
+
+                    if st.button("Save Status", key=f"save_user_status_{user_email}"):
+                        set_user_active(user_email, new_active)
+                        st.success(f"Updated {user_email}.")
+                        st.rerun()

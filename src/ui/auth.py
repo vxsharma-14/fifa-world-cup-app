@@ -6,6 +6,22 @@ from src.config import CONFIG
 from src.db_service import get_user_data, create_user, hash_password
 
 
+def _clear_auth_session(controller: CookieController) -> None:
+    """Clears the persisted and in-memory auth state."""
+    controller.remove("authenticated_user")
+    if "authenticated_user" in st.session_state:
+        del st.session_state["authenticated_user"]
+    if "user_name" in st.session_state:
+        del st.session_state["user_name"]
+
+
+def _is_account_active(user_data: dict | None) -> bool:
+    """Returns True when the account is active or legacy records omit the flag."""
+    if not user_data:
+        return False
+    return bool(user_data.get("is_active", True))
+
+
 def render_auth_panel() -> str:
     """Assembles access cards, login inputs, and sign-out triggers in the left tray."""
     st.sidebar.title("🔐 Access Portal")
@@ -19,29 +35,32 @@ def render_auth_panel() -> str:
     # 1. Handle Logout/Session Mismatch
     if "authenticated_user" in st.session_state and user_cookie != st.session_state["authenticated_user"]:
         # Session state is out of sync with cookie, force logout to be safe
-        del st.session_state["authenticated_user"]
-        if "user_name" in st.session_state:
-            del st.session_state["user_name"]
+        _clear_auth_session(controller)
         st.rerun()
 
     # 2. Sync if Cookie exists but Session empty
     if user_cookie and "authenticated_user" not in st.session_state:
         user_data = get_user_data(user_cookie)
-        if user_data:
+        if user_data and _is_account_active(user_data):
             st.session_state["authenticated_user"] = user_cookie
             st.session_state["user_name"] = user_data["name"]
         else:
             # Cookie exists for unknown user, clear it
-            controller.remove("authenticated_user")
+            _clear_auth_session(controller)
+            if user_data and not _is_account_active(user_data):
+                st.sidebar.error("This account has been disabled.")
             st.rerun()
 
     # 3. Render State
     if "authenticated_user" in st.session_state:
+        current_user_data = get_user_data(st.session_state["authenticated_user"])
+        if not _is_account_active(current_user_data):
+            _clear_auth_session(controller)
+            st.sidebar.error("This account has been disabled.")
+            st.rerun()
         st.sidebar.success(f"Hello, {st.session_state['user_name']}")
         if st.sidebar.button("Log Out", use_container_width=True, key="logout_btn"):
-            controller.remove("authenticated_user")
-            del st.session_state["authenticated_user"]
-            del st.session_state["user_name"]
+            _clear_auth_session(controller)
             st.rerun()
         return st.session_state["authenticated_user"]
 
@@ -74,13 +93,15 @@ def render_auth_panel() -> str:
 
             if st.form_submit_button("Login"):
                 user_data = get_user_data(email)
-                if user_data and user_data["password_hash"] == hash_password(password):
+                if user_data and _is_account_active(user_data) and user_data["password_hash"] == hash_password(password):
                     # Set persistent cookie
                     controller.set("authenticated_user", email, path="/")
                     
                     st.session_state["authenticated_user"] = email
                     st.session_state["user_name"] = user_data["name"]
                     st.rerun()
+                elif user_data and not _is_account_active(user_data):
+                    st.sidebar.error("This account has been disabled.")
                 else:
                     st.sidebar.error("Invalid credentials.")
 

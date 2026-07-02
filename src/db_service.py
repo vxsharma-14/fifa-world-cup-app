@@ -42,7 +42,8 @@ def create_user(email: str, name: str, password_raw: str) -> None:
     db.reference(f"users/{clean_email_key(email)}").set({
         "email": email,
         "name": name.strip().title(),
-        "password_hash": hash_password(password_raw)
+        "password_hash": hash_password(password_raw),
+        "is_active": True
     })
 
 def reset_user_password(email: str, generic_password: str = "123456") -> None:
@@ -201,6 +202,13 @@ def get_match_points_breakdown(match_id: str) -> dict:
 def get_all_users() -> dict:
     """Fetches all registered users from the system."""
     return db.reference("users").get() or {}
+
+
+def set_user_active(email: str, is_active: bool) -> None:
+    """Enables or disables a user without deleting their data."""
+    db.reference(f"users/{clean_email_key(email)}").update({
+        "is_active": is_active
+    })
 
 
 def get_rosters() -> dict[str, list[str]]:
