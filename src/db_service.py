@@ -3,6 +3,8 @@
 import hashlib
 import zoneinfo
 from datetime import datetime, timedelta, timezone
+
+import streamlit as st
 from firebase_admin import db
 from src.pre_tournament import (
     normalize_player_pick,
@@ -13,6 +15,22 @@ from src.pre_tournament import (
 # US Pacific Time (PDT) is UTC-7
 PT_OFFSET = timedelta(hours=-7)
 PT = zoneinfo.ZoneInfo("US/Pacific")
+
+
+def _clear_cached_reads() -> None:
+    """Clears cached read helpers after a write."""
+    for fn in (
+        get_scheduled_matches,
+        get_matches_by_date,
+        get_match_results,
+        get_rosters,
+        get_all_users,
+        get_all_roster_players,
+    ):
+        try:
+            fn.clear()
+        except Exception:
+            pass
 
 def get_match_cutoff_dt(kickoff_iso: str) -> datetime:
     """Calculates the 15-minute cutoff for a match in PT."""
@@ -45,11 +63,13 @@ def create_user(email: str, name: str, password_raw: str) -> None:
         "password_hash": hash_password(password_raw),
         "is_active": True
     })
+    get_all_users.clear()
 
 def reset_user_password(email: str, generic_password: str = "123456") -> None:
     """Admin tool to override a user's password."""
     db.reference(f"users/{clean_email_key(email)}/password_hash").set(hash_password(generic_password))
 
+@st.cache_data(show_spinner=False)
 def get_scheduled_matches() -> dict:
     """Fetches all scheduled matches across all dates, returns a flat dict of all matches."""
     all_dates_ref = db.reference("metadata").get() or {}
@@ -59,6 +79,7 @@ def get_scheduled_matches() -> dict:
             all_matches.update(matches)
     return all_matches
 
+@st.cache_data(show_spinner=False)
 def get_matches_by_date() -> dict:
     """Fetches the nested metadata structure: {date: {match_id: {...}}}."""
     return db.reference("metadata").get() or {}
@@ -92,6 +113,7 @@ def save_structured_match(
         "scoring_stage": scoring_stage,
         "status": "scheduled"
     })
+    _clear_cached_reads()
 
 def update_matches(matches_list: list) -> None:
     """Pushes an updated list of raw match strings to metadata storage."""
@@ -148,6 +170,7 @@ def save_daily_predictions(email: str, date: str, match_winners_map: dict, daily
 def delete_all_matches() -> None:
     """Clears out the entire match schedule metadata node."""
     db.reference("metadata/matches").delete()
+    _clear_cached_reads()
 
 def save_match_result(match_id: str, result_data: dict) -> None:
     """Saves finalized results directly into the match metadata node and triggers entity scoring."""
@@ -186,7 +209,9 @@ def save_match_result(match_id: str, result_data: dict) -> None:
         target_match.get("away_team"),
         scoring_stage,
     )
+    _clear_cached_reads()
 
+@st.cache_data(show_spinner=False)
 def get_match_results() -> dict:
     """Fetches all submitted match results from the database."""
     return db.reference("results").get() or {}
@@ -199,6 +224,7 @@ def get_match_points_breakdown(match_id: str) -> dict:
     """Retrieves granular points breakdown (player/team) for a specific match."""
     return db.reference(f"match_points/{match_id}").get() or {}
 
+@st.cache_data(show_spinner=False)
 def get_all_users() -> dict:
     """Fetches all registered users from the system."""
     return db.reference("users").get() or {}
@@ -209,8 +235,10 @@ def set_user_active(email: str, is_active: bool) -> None:
     db.reference(f"users/{clean_email_key(email)}").update({
         "is_active": is_active
     })
+    get_all_users.clear()
 
 
+@st.cache_data(show_spinner=False)
 def get_rosters() -> dict[str, list[str]]:
     """Fetches all country rosters from the system.
 
@@ -300,6 +328,7 @@ def save_user_daily_override(email: str, match_id: str, team_pick: str, daily_pl
         "submitted_at": f"{get_pt_timestamp()} (Admin WhatsApp Override)"
     })
 
+@st.cache_data(show_spinner=False)
 def get_all_roster_players() -> list:
     """Fetches all player names across all teams from the rosters node."""
     all_players = []

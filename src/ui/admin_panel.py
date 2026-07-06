@@ -8,7 +8,7 @@ from src.config import CONFIG
 from src.db_service import (
     get_scheduled_matches, save_structured_match,
     delete_all_matches, save_match_result, get_match_results, get_pt_timestamp,
-    get_rosters, get_all_users, set_user_active
+    get_rosters, get_all_users, set_user_active, get_all_roster_players
 )
 from src.ui.leaderboard import render_leaderboard_table
 
@@ -83,6 +83,8 @@ def render_admin_dashboard() -> None:
                 else:
                     player_list = [p.strip() for p in players_str.split(",")]
                     db.reference(f"rosters/{team}").set(player_list)
+                    get_rosters.clear()
+                    get_all_roster_players.clear()
                     st.success(f"Roster for {team} updated!")
                     st.rerun()
         
@@ -93,6 +95,8 @@ def render_admin_dashboard() -> None:
                 st.write(", ".join(players))
                 if st.button(f"🗑️ Delete Roster: {team}", key=f"del_{team}"):
                     db.reference(f"rosters/{team}").delete()
+                    get_rosters.clear()
+                    get_all_roster_players.clear()
                     st.rerun()
     with tab_sched:
         st.subheader("📅 Master Calendar Match Scheduler")
@@ -169,7 +173,157 @@ def render_admin_dashboard() -> None:
             st.info("No completed matches found to grade.")
         else:
             sorted_completed = sorted(completed_admin_list, key=lambda x: x.get("kickoff_time", ""))
-            for m in sorted_completed:
+            match_options = {}
+            for match in sorted_completed:
+                match_id = match["id"]
+                dt = datetime.fromisoformat(match["kickoff_time"])
+                date_str = dt.strftime("%d/%m")
+                time_str = dt.strftime("%I:%M %p")
+                home, away = match["home_team"], match["away_team"]
+                has_results = match_id in existing_results
+                match_options[match_id] = f"{date_str} {time_str} | {home} vs {away} {'✅' if has_results else '⏳'}"
+
+            if "grade_selected_match_id" not in st.session_state or st.session_state["grade_selected_match_id"] not in match_options:
+                st.session_state["grade_selected_match_id"] = next(
+                    (match["id"] for match in sorted_completed if match["id"] not in existing_results),
+                    sorted_completed[0]["id"],
+                )
+
+            selected_match_id = st.selectbox(
+                "Select a match to edit",
+                options=list(match_options.keys()),
+                format_func=lambda x: match_options[x],
+                key="grade_selected_match_id",
+            )
+
+            selected_match = next(match for match in sorted_completed if match["id"] == selected_match_id)
+            m_id = selected_match["id"]
+            m_data = existing_results.get(m_id, {})
+            home, away = selected_match["home_team"], selected_match["away_team"]
+            has_results = m_id in existing_results
+            btn_label = "Edit Results" if has_results else "Add Results"
+            all_roster_players = get_all_roster_players()
+            player_options = [""] + all_roster_players
+
+            st.caption("Only one match editor is rendered at a time to keep Add Scorer responsive.")
+
+            with st.expander(match_options[m_id], expanded=True):
+                with st.form(f"form_{m_id}"):
+                    current_stage = m_data.get("scoring_stage") or selected_match.get("scoring_stage", "league")
+                    stage_options = list(SCORING_STAGE_OPTIONS.keys())
+                    stage_index = stage_options.index(current_stage) if current_stage in stage_options else 0
+                    scoring_stage = st.selectbox(
+                        "Scoring Stage",
+                        options=stage_options,
+                        format_func=lambda stage: SCORING_STAGE_OPTIONS[stage],
+                        index=stage_index,
+                        key=f"scoring_stage_{m_id}",
+                    )
+
+                    c_s1, c_s2 = st.columns(2)
+                    h_score = c_s1.number_input("Home Goals", min_value=0, value=int(m_data.get("home_score", 0)), step=1)
+                    a_score = c_s2.number_input("Away Goals", min_value=0, value=int(m_data.get("away_score", 0)), step=1)
+
+                    s_key = f"scorer_rows_{m_id}"
+                    c_key = f"card_rows_{m_id}"
+                    if s_key not in st.session_state:
+                        st.session_state[s_key] = (
+                            [{"team": home, "name": n, "goals": 1} for n in m_data.get("home_scorers", [])]
+                            + [{"team": away, "name": n, "goals": 1} for n in m_data.get("away_scorers", [])]
+                            or [{"team": home, "name": "", "goals": 1}]
+                        )
+                    if c_key not in st.session_state:
+                        st.session_state[c_key] = (
+                            [{"team": home, "name": n, "type": "Yellow"} for n in m_data.get("yellow_cards", [])]
+                            + [{"team": home, "name": n, "type": "Red"} for n in m_data.get("red_cards", [])]
+                            or [{"team": home, "name": "", "type": "Yellow"}]
+                        )
+
+                    st.markdown("##### Goal Scorers")
+                    for i, row in enumerate(st.session_state[s_key]):
+                        c1, c2, c3 = st.columns([2, 2, 1])
+                        row["team"] = c1.selectbox(
+                            "Team",
+                            [home, away],
+                            index=[home, away].index(row["team"]) if row["team"] in [home, away] else 0,
+                            key=f"st_{m_id}_{i}",
+                        )
+                        idx = player_options.index(row["name"]) if row["name"] in player_options else 0
+                        row["name"] = c2.selectbox(
+                            "Player",
+                            options=player_options,
+                            index=idx,
+                            key=f"sn_{m_id}_{i}",
+                        )
+                        row["goals"] = c3.number_input(
+                            "Goals",
+                            min_value=1,
+                            value=row.get("goals", 1),
+                            key=f"sg_{m_id}_{i}",
+                        )
+                    if st.form_submit_button("➕ Add Scorer"):
+                        st.session_state[s_key].append({"team": home, "name": "", "goals": 1})
+                        st.rerun()
+
+                    st.markdown("##### Discipline (Cards)")
+                    for i, row in enumerate(st.session_state[c_key]):
+                        c1, c2, c3 = st.columns([2, 2, 1])
+                        row["team"] = c1.selectbox(
+                            "Team",
+                            [home, away],
+                            index=[home, away].index(row["team"]) if row["team"] in [home, away] else 0,
+                            key=f"ct_{m_id}_{i}",
+                        )
+                        row["name"] = c2.text_input("Player", value=row["name"], key=f"cn_{m_id}_{i}")
+                        row["type"] = c3.selectbox(
+                            "Type",
+                            ["Yellow", "Red"],
+                            index=["Yellow", "Red"].index(row["type"]) if row["type"] in ["Yellow", "Red"] else 0,
+                            key=f"cty_{m_id}_{i}",
+                        )
+                    if st.form_submit_button("➕ Add Card"):
+                        st.session_state[c_key].append({"team": home, "name": "", "type": "Yellow"})
+                        st.rerun()
+
+                    motm_current = m_data.get("player_of_the_match", "")
+                    motm_idx = player_options.index(motm_current) if motm_current in player_options else 0
+                    motm = st.selectbox("Man of the Match:", options=player_options, index=motm_idx, key=f"motm_{m_id}")
+
+                    if st.form_submit_button(btn_label, type="primary"):
+                        def norm(name):
+                            return name.strip().title()
+
+                        h_scorers, a_scorers, yellow, red = [], [], [], []
+                        for r in st.session_state[s_key]:
+                            if r["name"]:
+                                if r["team"] == home:
+                                    h_scorers.extend([norm(r["name"])] * r["goals"])
+                                else:
+                                    a_scorers.extend([norm(r["name"])] * r["goals"])
+                        for r in st.session_state[c_key]:
+                            if r["name"]:
+                                if r["type"] == "Yellow":
+                                    yellow.append(norm(r["name"]))
+                                else:
+                                    red.append(norm(r["name"]))
+
+                        save_match_result(m_id, {
+                            "match_id": m_id,
+                            "home_score": h_score,
+                            "away_score": a_score,
+                            "winning_team": home if h_score > a_score else (away if a_score > h_score else "Draw"),
+                            "home_scorers": h_scorers,
+                            "away_scorers": a_scorers,
+                            "yellow_cards": yellow,
+                            "red_cards": red,
+                            "player_of_the_match": norm(motm) if motm else "",
+                            "scoring_stage": scoring_stage,
+                        })
+                        del st.session_state[s_key]
+                        del st.session_state[c_key]
+                        st.success(f"Results for {home} vs {away} saved!")
+                        st.rerun()
+            for m in []:
                 m_id = m["id"]
                 m_data = existing_results.get(m_id, {})
                 home, away = m["home_team"], m["away_team"]
@@ -208,9 +362,6 @@ def render_admin_dashboard() -> None:
                             st.session_state[s_key] = [{'team': home, 'name': n, 'goals': 1} for n in m_data.get('home_scorers', [])] + [{'team': away, 'name': n, 'goals': 1} for n in m_data.get('away_scorers', [])] or [{'team': home, 'name': '', 'goals': 1}]
                         if c_key not in st.session_state: 
                             st.session_state[c_key] = [{'team': home, 'name': n, 'type': 'Yellow'} for n in m_data.get('yellow_cards', [])] + [{'team': home, 'name': n, 'type': 'Red'} for n in m_data.get('red_cards', [])] or [{'team': home, 'name': '', 'type': 'Yellow'}]
-
-                        from src.db_service import get_all_roster_players
-                        all_roster_players = get_all_roster_players()
 
                         st.markdown("##### Goal Scorers")
                         for i, row in enumerate(st.session_state[s_key]):
@@ -362,9 +513,6 @@ def render_admin_dashboard() -> None:
             # COLUMN 2: ISOLATED GLOBAL DAILY PLAYER OVERRIDE FORM
             with col_player:
                 st.markdown("##### 🏃‍♂️ Part B: Override Daily Player Lock-Ins")
-                from src.db_service import get_all_roster_players
-                all_roster_players = get_all_roster_players()
-                
                 with st.form("whatsapp_player_override_form"):
                     options = [""] + all_roster_players
                     

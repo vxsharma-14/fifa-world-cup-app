@@ -49,7 +49,7 @@ def render_daily_predictions_section(email: str, raw_matches: dict) -> None:
         matches_on_date = raw_matches[date]
         if not isinstance(matches_on_date, dict): continue
         
-        # Find earliest match to determine cutoff for the whole day
+        # Find the earliest match to determine cutoff for the whole day
         earliest_match = min(matches_on_date.values(), key=lambda x: x['kickoff_time'])
         matchday_cutoff_dt = get_match_cutoff_dt(earliest_match['kickoff_time'])
         
