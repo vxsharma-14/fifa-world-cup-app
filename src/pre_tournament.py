@@ -46,6 +46,8 @@ def normalize_team_pick(pick: Any, default_phase: str = DEFAULT_PRE_T_PHASE) -> 
     """Normalizes a team pick into the phase-aware storage shape."""
     if isinstance(pick, dict):
         name = get_pick_name(pick).title()
+        if name == "Usa":
+            name = "USA"
         phase = str(pick.get("phase") or default_phase).strip()
     else:
         name = get_pick_name(pick).title()
