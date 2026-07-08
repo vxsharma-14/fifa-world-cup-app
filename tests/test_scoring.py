@@ -1,5 +1,5 @@
 import unittest
-from src.scoring_engine import calculate_match_points
+from src.scoring_engine import calculate_match_points, calculate_user_match_breakdown
 
 class TestScoringEngine(unittest.TestCase):
     def setUp(self):
@@ -102,6 +102,76 @@ class TestScoringEngine(unittest.TestCase):
         breakdown = calculate_match_points("match_1", pre_t_picks, daily_picks, match_result, match_metadata)
         self.assertEqual(sum(breakdown.values()), -40)
         self.assertEqual(breakdown["goal_difference"], -40)
+
+    def test_phase_history_keeps_phase_one_pick_for_phase_one_matches(self):
+        """Historical Phase 1 picks continue to score Phase 1 matches."""
+        m_points = {
+            "scoring_stage": "league",
+            "team_points": {
+                "Germany": {"total": 10},
+                "Portugal": {"total": 10},
+            },
+            "player_points": {},
+        }
+        pre_t_history = {
+            "phase1": {
+                "teams": [{"name": "Germany", "phase": "Phase1"}],
+                "players": [],
+            },
+            "phase2": {
+                "teams": [{"name": "Portugal", "phase": "Phase2"}],
+                "players": [],
+            },
+        }
+        daily_picks = {"teams": {"match_1": "Germany"}, "players": []}
+
+        breakdown = calculate_user_match_breakdown(
+            "user@example.com",
+            "2026-06-14",
+            "match_1",
+            m_points,
+            {"teams": [], "players": []},
+            daily_picks,
+            pre_t_history,
+        )
+
+        self.assertEqual(breakdown["team_points"], 20)
+        self.assertEqual(breakdown["phase_bucket"], "Phase1")
+
+    def test_phase_history_uses_phase_two_snapshot_for_later_matches(self):
+        """Phase 2 selections remain active for later stage matches."""
+        m_points = {
+            "scoring_stage": "SF",
+            "team_points": {
+                "Germany": {"total": 10},
+                "Portugal": {"total": 10},
+            },
+            "player_points": {},
+        }
+        pre_t_history = {
+            "phase1": {
+                "teams": [{"name": "Germany", "phase": "Phase1"}],
+                "players": [],
+            },
+            "phase2": {
+                "teams": [{"name": "Portugal", "phase": "Phase2"}],
+                "players": [],
+            },
+        }
+        daily_picks = {"teams": {"match_2": "Portugal"}, "players": []}
+
+        breakdown = calculate_user_match_breakdown(
+            "user@example.com",
+            "2026-07-06",
+            "match_2",
+            m_points,
+            {"teams": [], "players": []},
+            daily_picks,
+            pre_t_history,
+        )
+
+        self.assertEqual(breakdown["team_points"], 15)
+        self.assertEqual(breakdown["phase_bucket"], "Phase3")
 
 if __name__ == '__main__':
     unittest.main()

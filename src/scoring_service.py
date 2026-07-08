@@ -1,7 +1,14 @@
 """Service for computing match points and updating user points/leaderboard manually."""
 
 from firebase_admin import db
-from src.db_service import get_all_users, get_scheduled_matches, get_pre_tournament_picks, get_daily_predictions, clean_email_key
+from src.db_service import (
+    get_all_users,
+    get_scheduled_matches,
+    get_pre_tournament_history,
+    get_pre_tournament_picks,
+    get_daily_predictions,
+    clean_email_key,
+)
 from typing import Dict, Any
 
 from src.scoring_engine import calculate_match_points_for_db, calculate_user_match_breakdown
@@ -39,9 +46,18 @@ def refresh_leaderboard() -> None:
             # Fetch predictions and pre-t picks
             daily = get_daily_predictions(email, date)
             pre_t = get_pre_tournament_picks(email)
+            pre_t_history = get_pre_tournament_history(email)
             
             # Calculate user points using new engine
-            breakdown = calculate_user_match_breakdown(email, date, match_id, m_points, pre_t, daily)
+            breakdown = calculate_user_match_breakdown(
+                email,
+                date,
+                match_id,
+                m_points,
+                pre_t,
+                daily,
+                pre_t_history,
+            )
             
             # 4. Save granular audit for this match
             user_points_root.child(f"{clean_email_key(email)}/daily_breakdown/{date}/matches/{match_id}").set(breakdown)

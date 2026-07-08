@@ -44,10 +44,79 @@ SCORING_RULES: Dict[str, Dict[str, int]] = {
     },
 }
 
+MATCH_STAGE_TO_PHASE: Dict[str, str] = {
+    "league": "Phase1",
+    "R32": "Phase1",
+    "R16": "Phase2",
+    "QF": "Phase2",
+    "SF": "Phase3",
+    "F": "Phase3",
+}
+
 
 def get_scoring_rules(scoring_stage: str) -> Dict[str, int]:
     """Returns configured scoring rules for a match stage."""
     return SCORING_RULES.get(scoring_stage, SCORING_RULES["league"])
+
+
+def get_phase_bucket_for_stage(scoring_stage: str) -> str:
+    """Returns the pre-tournament phase bucket that owns the given match stage."""
+    return MATCH_STAGE_TO_PHASE.get(scoring_stage, "Phase1")
+
+
+def _get_history_snapshot(
+    pre_t_history: Dict[str, Any] | None,
+    phase_bucket: str,
+) -> Dict[str, Any]:
+    """Returns the best matching pre-tournament snapshot for the requested phase."""
+    if not isinstance(pre_t_history, dict) or not pre_t_history:
+        return {}
+
+    normalized_key = phase_bucket.strip().lower()
+    if normalized_key in {"phase1", "phase2", "phase3"}:
+        snapshot = pre_t_history.get(normalized_key)
+        if isinstance(snapshot, dict):
+            return snapshot
+
+    # Fallback for legacy shapes or partially populated history nodes.
+    if normalized_key == "phase3":
+        for candidate_key in ("phase3", "phase2", "phase1"):
+            snapshot = pre_t_history.get(candidate_key)
+            if isinstance(snapshot, dict):
+                return snapshot
+    if normalized_key == "phase2":
+        for candidate_key in ("phase2", "phase1"):
+            snapshot = pre_t_history.get(candidate_key)
+            if isinstance(snapshot, dict):
+                return snapshot
+    snapshot = pre_t_history.get("phase1")
+    if isinstance(snapshot, dict):
+        return snapshot
+    return {}
+
+
+def _get_active_pre_tournament_state(
+    pre_t: Dict[str, Any],
+    pre_t_history: Dict[str, Any] | None,
+    phase_bucket: str,
+) -> Dict[str, Any]:
+    """Returns the active pre-tournament state for the match phase."""
+    snapshot = _get_history_snapshot(pre_t_history, phase_bucket)
+    if snapshot:
+        return snapshot
+
+    # Keep the current behavior as a fallback when no history exists.
+    return pre_t or {}
+
+
+def get_active_pre_tournament_snapshot(
+    pre_t: Dict[str, Any],
+    pre_t_history: Dict[str, Any] | None,
+    scoring_stage: str,
+) -> Dict[str, Any]:
+    """Returns the active pre-tournament snapshot for a given match stage."""
+    phase_bucket = get_phase_bucket_for_stage(scoring_stage)
+    return _get_active_pre_tournament_state(pre_t, pre_t_history, phase_bucket)
 
 
 def calculate_match_points_for_db(
@@ -117,7 +186,8 @@ def calculate_user_match_breakdown(
     match_id: str,
     m_points: Dict[str, Any],
     pre_t: Dict[str, Any],
-    daily: Dict[str, Any]
+    daily: Dict[str, Any],
+    pre_t_history: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Core logic extracted from refresh_leaderboard.
@@ -127,8 +197,12 @@ def calculate_user_match_breakdown(
         if isinstance(d, dict): return d.get("total", 0)
         return d if isinstance(d, int) else 0
 
-    pre_t_team_multipliers = pick_multiplier_map(pre_t.get("teams", []))
-    pre_t_player_multipliers = pick_multiplier_map(pre_t.get("players", []))
+    scoring_stage = str(m_points.get("scoring_stage") or "league")
+    phase_bucket = get_phase_bucket_for_stage(scoring_stage)
+    active_pre_t = get_active_pre_tournament_snapshot(pre_t, pre_t_history, scoring_stage)
+
+    pre_t_team_multipliers = pick_multiplier_map(active_pre_t.get("teams", []))
+    pre_t_player_multipliers = pick_multiplier_map(active_pre_t.get("players", []))
     
     team_pick = daily.get('teams', {}).get(match_id)
     raw_player_picks = daily.get('players', [])
@@ -166,4 +240,6 @@ def calculate_user_match_breakdown(
         "team_multiplier_value": team_multiplier_value,
         "player_multiplier_value": player_multiplier_value,
         "player_multipliers": player_multipliers,
+        "scoring_stage": scoring_stage,
+        "phase_bucket": phase_bucket,
     }

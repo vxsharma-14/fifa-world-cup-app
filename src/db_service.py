@@ -124,8 +124,16 @@ def get_pre_tournament_picks(email: str) -> dict:
     data = db.reference(f"pre_tournament/{clean_email_key(email)}").get() or {}
     return normalize_pre_tournament_picks(data)
 
+def get_pre_tournament_history(email: str) -> dict:
+    """Fetches the stored pre-tournament history snapshots for a profile."""
+    return db.reference(f"pre_tournament_history/{clean_email_key(email)}").get() or {}
+
 def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
-    """Saves locked pre-tournament choices to database tracking."""
+    """Saves locked pre-tournament choices to database tracking.
+
+    The current node keeps the latest editable state, while a history snapshot is
+    appended so overwritten selections can still be reconstructed later.
+    """
     normalized_teams = []
     for team in teams:
         normalized_team = normalize_team_pick(team)
@@ -142,6 +150,12 @@ def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
         "teams": normalized_teams,
         "players": normalized_players,
         "submitted_at": get_pt_timestamp()
+    })
+
+    db.reference(f"pre_tournament_history/{clean_email_key(email)}").push({
+        "teams": normalized_teams,
+        "players": normalized_players,
+        "submitted_at": get_pt_timestamp(),
     })
 
 def get_daily_predictions(email: str, date: str) -> dict:

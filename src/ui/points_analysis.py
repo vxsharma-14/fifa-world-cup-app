@@ -3,7 +3,9 @@
 import streamlit as st
 from firebase_admin import db
 from src.db_service import (
-    get_pre_tournament_picks, get_daily_predictions, 
+    get_pre_tournament_history,
+    get_pre_tournament_picks,
+    get_daily_predictions, 
     get_matches_by_date, get_match_results, get_pt_date_key
 )
 from src.scoring_engine import calculate_user_match_breakdown
@@ -15,6 +17,7 @@ def render_granular_points_analysis(email: str) -> None:
 
     # Fetch data
     pre_t_picks = get_pre_tournament_picks(email)
+    pre_t_history = get_pre_tournament_history(email)
     all_dates_matches = get_matches_by_date()
 
     # Calculate total points and breakdown per match
@@ -33,7 +36,15 @@ def render_granular_points_analysis(email: str) -> None:
                 m_points = db.reference(f"match_points/{match_id}").get() or {}
                 
                 # Calculate breakdown using new engine
-                breakdown = calculate_user_match_breakdown(email, date, match_id, m_points, pre_t_picks, daily_picks)
+                breakdown = calculate_user_match_breakdown(
+                    email,
+                    date,
+                    match_id,
+                    m_points,
+                    pre_t_picks,
+                    daily_picks,
+                    pre_t_history,
+                )
                 
                 team_pts = breakdown.get('team_points', 0)
                 player_pts = breakdown.get('player_points', 0)
