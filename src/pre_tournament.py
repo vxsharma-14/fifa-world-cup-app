@@ -8,7 +8,7 @@ DEFAULT_PRE_T_PHASE = "Phase1"
 PRE_T_PHASE_MULTIPLIERS: Dict[str, float] = {
     "Phase1": 2.0,
     "Phase2": 1.5,
-    "Phase3": 1.5,
+    "Phase3": 1.25,
 }
 
 PT = zoneinfo.ZoneInfo("US/Pacific")
@@ -21,6 +21,12 @@ PRE_T_CHANGE_WINDOWS: Dict[str, Dict[str, Any]] = {
         "closes_at": datetime(2026, 7, 4, 9, 30, tzinfo=PT),
         "max_team_changes": 2,
         "max_player_changes": 2,
+    },
+    "Phase3": {
+        "opens_at": datetime(2000, 1, 1, 0, 0, tzinfo=PT),
+        "closes_at": datetime(2026, 7, 14, 11, 30, tzinfo=PT),
+        "max_team_changes": 1,
+        "max_player_changes": 1,
     },
 }
 
@@ -137,6 +143,10 @@ def get_active_pre_t_phase(current_time: datetime | None = None) -> str:
         now = now.replace(tzinfo=PT)
     else:
         now = now.astimezone(PT)
+
+    phase3_window = PRE_T_CHANGE_WINDOWS.get("Phase3")
+    if phase3_window and phase3_window["opens_at"] <= now < phase3_window["closes_at"]:
+        return "Phase3"
 
     phase2_window = PRE_T_CHANGE_WINDOWS.get("Phase2")
     if phase2_window and phase2_window["opens_at"] <= now < phase2_window["closes_at"]:

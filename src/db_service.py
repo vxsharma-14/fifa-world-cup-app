@@ -128,7 +128,14 @@ def get_pre_tournament_history(email: str) -> dict:
     """Fetches the stored pre-tournament history snapshots for a profile."""
     return db.reference(f"pre_tournament_history/{clean_email_key(email)}").get() or {}
 
-def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
+def save_pre_tournament_picks(
+    email: str,
+    teams: list,
+    players: list,
+    history_phase_key: str | None = None,
+    history_changed: bool | None = None,
+    history_source: str = "streamlit",
+) -> None:
     """Saves locked pre-tournament choices to database tracking.
 
     The current node keeps the latest editable state, while a history snapshot is
@@ -152,11 +159,22 @@ def save_pre_tournament_picks(email: str, teams: list, players: list) -> None:
         "submitted_at": get_pt_timestamp()
     })
 
-    db.reference(f"pre_tournament_history/{clean_email_key(email)}").push({
+    history_payload = {
         "teams": normalized_teams,
         "players": normalized_players,
         "submitted_at": get_pt_timestamp(),
-    })
+    }
+    if history_phase_key:
+        normalized_phase_key = str(history_phase_key).strip().lower()
+        if normalized_phase_key in {"phase1", "phase2", "phase3"}:
+            history_payload.update({
+                "phase": normalized_phase_key.capitalize(),
+                "changed": bool(history_changed),
+                "source": history_source,
+            })
+            db.reference(f"pre_tournament_history/{clean_email_key(email)}/{normalized_phase_key}").set(history_payload)
+
+    db.reference(f"pre_tournament_history/{clean_email_key(email)}").push(history_payload)
 
 def get_daily_predictions(email: str, date: str) -> dict:
     """Retrieves matchday choices for a specific user and date."""
