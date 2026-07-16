@@ -36,6 +36,12 @@ SCORING_RULES: Dict[str, Dict[str, int]] = {
         "correct_result": 160,
         "goal_difference": 80,
     },
+    "TP": {
+        "goal": 240,
+        "motm": 480,
+        "correct_result": 240,
+        "goal_difference": 120,
+    },
     "F": {
         "goal": 320,
         "motm": 640,
@@ -50,6 +56,7 @@ MATCH_STAGE_TO_PHASE: Dict[str, str] = {
     "R16": "Phase2",
     "QF": "Phase2",
     "SF": "Phase3",
+    "TP": "Phase3",
     "F": "Phase3",
 }
 

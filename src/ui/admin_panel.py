@@ -18,6 +18,7 @@ SCORING_STAGE_OPTIONS = {
     "R16": "Round of 16",
     "QF": "Quarter Final",
     "SF": "Semi Final",
+    "TP": "Bronze Final",
     "F": "Final",
 }
 
